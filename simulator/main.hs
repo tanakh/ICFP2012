@@ -18,11 +18,11 @@ main = do
       bd = map (take w . (++ repeat ' ')) bd0
   ansMVar <- newEmptyMVar
   let Opt.AnswerFile ansfn = Opt.answer opt
-  forkIO $ ansProvider ansfn ansMVar
+  forkIO $ fileProvider ansfn ansMVar
   print =<< simulate bd ansMVar
 
-ansProvider :: FilePath -> MVar Ans.Ans ->  IO ()
-ansProvider fn mvar = do
+fileProvider :: FilePath -> MVar Ans.Ans ->  IO ()
+fileProvider fn mvar = do
   mvs <- filter (`elem` "LRUDWA") <$> readFile fn
   mapM_ (putMVar mvar) $ map Ans.Cont mvs
   putMVar mvar Ans.End

@@ -13,7 +13,7 @@ data Option =
   
 data Input  = InputFile FilePath | Stdin deriving (Eq, Show)
 data Answer = AnswerFile FilePath | Keyboard | Auto deriving (Eq, Show)
-data Replay = ReplayFile FilePath | ReplayStdout deriving (Eq, Show)
+data Replay = ReplayFile FilePath | ReplayDefault | ReplayNothing deriving (Eq, Show)
 
 parseIO :: IO Option
 parseIO = execParser $ info (helper <*> parse)
@@ -43,9 +43,9 @@ parse = Option
         <*> strOption (
           long "replay"
           & short 'r'
-          & transform ReplayFile
-          & value ReplayStdout
-          & help "replay filename; (default) print to stdout")
+          & transform fr
+          & value ReplayDefault
+          & help "replay filename; 'none'; (default) give default filename")
         <*> switch ( 
           long "verbose"
           & short 'v'
@@ -54,3 +54,7 @@ parse = Option
     fa str = case str of
       "kbd"  -> Keyboard
       _      -> AnswerFile str
+    fr str = case str of
+      "none" -> ReplayNothing
+      _      -> ReplayFilename str
+      

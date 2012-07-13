@@ -28,3 +28,8 @@ executable ll-simulator
                      , pureMD5
                      , stm
                      , bytestring
+
+executable ll-ai-greedy
+  main-is:             ai/Greedy.hs
+  other-modules:       AI, Ans, LL,  Option, Pos, Provider
+  build-depends:       base ==4.5.*, vector, mtl, control-monad-loop, data-lens-fd, data-lens-template, optparse-applicative, filepath, pureMD5, stm, bytestring

@@ -1,25 +1,36 @@
 module Option where
 
-import OptParse.Applicative
-import OptParse.Applicative.Builder
+import Options.Applicative
+import Options.Applicative.Builder
+
+parseIO :: IO Option
+parseIO = execParser $ info (helper <*> parse)
+   ( fullDesc
+   & progDesc "Lambda Lifting Simulator"
+   & header "ll-simulator")
 
 parse :: Parser Option
 parse = Option 
-        <$> (value Stdin 
-             & fmap InputFile 
-             (strOption ( long "input" & short 'i')))
-        <*> (value Auto
-             & fmap AnswerFile
-             (strOption ( long "ans" & short 'a')))
-            )
-
-
+        <$> strOption ( long "input" 
+                        & short 'i' 
+                        & transform InputFile
+                        & value Stdin 
+                        & help "mine data input filename; (default) read from stdin") 
+        <*> strOption ( long "ans" 
+                        & short 'a' 
+                        & transform fa
+                        & value Auto
+                        & help "answer filename; 'kbd' interactive gameplay; (default) run solver")
+  where
+    fa str = case str of
+      "kbd"  -> Keyboard
+      _      -> AnswerFile str
 data Option = 
-  {
+  Option {
     input :: Input,
     answer :: Answer
   }
   
 data Input  = InputFile FilePath | Stdin
-data Answer = AnswerFile FilePath | Interactive | Auto
+data Answer = AnswerFile FilePath | Keyboard | Auto
 

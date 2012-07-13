@@ -1,12 +1,13 @@
 import Control.Applicative
 import System.Environment
 
-import Option
+import qualified Option as Opt
 import LL
 
 main :: IO ()
 main = do
-  [infile, ansfile] <- getArgs
+  opt <- Opt.parseIO 
+  let Opt.Option (Opt.InputFile infile) (Opt.AnswerFile ansfile) = opt
   txt <- readFile infile
   let bd0 = reverse $ lines txt
       w = maximum $ map length bd0

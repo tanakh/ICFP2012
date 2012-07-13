@@ -124,12 +124,16 @@ showBoard = do
         putChar =<< readCell bd x y
       putStrLn ""
 
-simulate :: Opt.Option -> [String] -> MVar Ans.Ans -> IO Result
-simulate opt bd mVarAns = do
+simulate :: Opt.Option -> [String] -> MVar Ans.Ans -> MVar LLState -> IO Result
+simulate opt bd mVarAns mVarState = do
   runLLT bd $ do
     res <- once $ do
       repeatLoopT $ do
+        -- pass the current status to the provider (and to player)
+        st <- lift . lift $ get
+        liftIO $ putMVar mVarState st
         when (Opt.verbose opt) $ lift . lift $ showStatus
+        -- receive answer
         ans <- liftIO $ takeMVar mVarAns
         let mv = case ans of
               Ans.End -> 'A'

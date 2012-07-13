@@ -37,4 +37,4 @@ executable ll-ai-greedy
 executable ll-ai-greedy2
   main-is:             AI/Greedy2.hs
   other-modules:       Ans, LL,  Option, Pos, Provider
-  build-depends:       base ==4.5.*, vector, mtl, control-monad-loop, data-lens-fd, data-lens-template, optparse-applicative, filepath, pureMD5, stm, bytestring
+  build-depends:       base ==4.5.*, vector, mtl, control-monad-loop, data-lens-fd, data-lens-template, optparse-applicative, filepath, pureMD5, stm, bytestring, pqueue

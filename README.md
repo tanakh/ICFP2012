@@ -8,8 +8,8 @@ comming soon...
 
 Members
 -------
+Takahiro Himura
 Hiromi Ishii
 Toshiki Kataoka
 Takayuki Muranushi
 Hideyuki Tanaka
-

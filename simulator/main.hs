@@ -17,8 +17,16 @@ main = do
       w = maximum $ map length bd0
       bd = map (take w . (++ repeat ' ')) bd0
   ansMVar <- newEmptyMVar
-  let Opt.AnswerFile ansfn = Opt.answer opt
-  forkIO $ fileProvider ansfn ansMVar
+  provider <- case Opt.answer opt of
+    Opt.AnswerFile ansfn -> return $ fileProvider ansfn ansMVar
+    Opt.Auto -> return $ autoProvider ansMVar
+    Opt.Keyboard -> do
+      hSetBuffering stdout NoBuffering
+      hSetBuffering stdin NoBuffering
+      hSetEcho stdin False
+      return $ kbdProvider ansMVar
+  let 
+  forkIO $ provider
   print =<< simulate bd ansMVar
 
 fileProvider :: FilePath -> MVar Ans.Ans ->  IO ()
@@ -26,3 +34,10 @@ fileProvider fn mvar = do
   mvs <- filter (`elem` "LRUDWA") <$> readFile fn
   mapM_ (putMVar mvar) $ map Ans.Cont mvs
   putMVar mvar Ans.End
+  
+autoProvider :: MVar Ans.Ans -> IO ()  
+autoProvider mv = putMVar mv Ans.End                
+
+kbdProvider :: MVar Ans.Ans -> IO ()  
+kbdProvider mv = putMVar mv Ans.End                
+

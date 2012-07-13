@@ -71,7 +71,7 @@ valAfraid x = x
 greedySolver = safetynet $ do
   _ <- evaluatePlaying debugMode
   yomi <- sort <$> mapM (\c -> (,c) <$> evaluateHand yomiDepth c) "LRUDA"
-  printe $ yomi
+  when debugMode $ printe $ yomi
   let (_, cmd) = head yomi
   return $ Ans.Cont cmd
 

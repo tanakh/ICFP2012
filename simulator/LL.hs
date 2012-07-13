@@ -344,6 +344,14 @@ whenInBound bd x y def action = liftIO $ do
 readCell bd x y = whenInBound bd x y (return '#') $ do
   row <- GM.read bd y
   GM.read row x
+  
+readCellMaybe bd x y = whenInBound bd x y (return Nothing) $ do
+  row <- GM.read bd y
+  Just <$> GM.read row x  
+  
+readCellList bd x y = whenInBound bd x y (return []) $ do
+  row <- GM.read bd y
+  (:[]) <$> GM.read row x    
 
 writeCell bd x y v = whenInBound bd x y (return ()) $ do
   row <- GM.read bd y
@@ -351,5 +359,8 @@ writeCell bd x y v = whenInBound bd x y (return ()) $ do
 
 readPos bd (Pos x y) = readCell bd x y
 writePos bd (Pos x y) v = writeCell bd x y v
+
+readPosMaybe bd (Pos x y) = readCellMaybe bd x y
+readPosList bd (Pos x y) = readCellList bd x y
 
 ll = lift . lift

@@ -1,10 +1,11 @@
+module DefaultMain(defaultMain) where
+
 import Control.Applicative
 import Control.Monad
 import Control.Concurrent
 import System.Environment
 import System.IO
 
-import           AI
 import qualified Ans as Ans
 import           LL
 import qualified Option as Opt
@@ -12,8 +13,8 @@ import           Provider
 import qualified Flood
 
 
-main :: IO ()
-main = do
+defaultMain :: Solver IO -> IO ()
+defaultMain theSolver = do
   opt <- Opt.parseIO
   txt <- case Opt.input opt of
     Opt.Stdin -> getContents
@@ -36,7 +37,7 @@ main = do
       forkIO $ kbdProvider ansMVar stateMVar
       return $ providedSolver ansMVar stateMVar
     Opt.Auto -> do
-      return $ autoSolver
-      
+      return $ theSolver
+
   print =<< simulate opt fld bd solver
 

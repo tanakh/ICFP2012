@@ -1,1 +1,1 @@
-main = putStrLn "A"
+module AI.Greedy where

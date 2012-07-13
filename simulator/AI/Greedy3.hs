@@ -76,14 +76,12 @@ evaluateHand depth hand
   | otherwise = do
     withBackup $ do
       roboPos0 <- access llPosL
-      result0 <- simulateStep hand
+      result <- simulateStep hand
       roboPos1 <- access llPosL
-      let result
-            | roboPos0 == roboPos1 = Dead 0
-            | otherwise            = result0
       case result of
         Win n -> return $ grandValue n
-        Abort n -> return $ grandValue n
+        Abort n -> do 
+          return $ grandValue n
         Dead n -> return $ grandValue n
         Skip -> return $ grandValue (-9999999)
         Cont -> 
@@ -189,10 +187,10 @@ evaluatePlaying debugFlag = do
   let liftYes :: Bool 
       liftYes = liftVal < Unknown && noLambda == 0
       abortScoreHope = abortScore0 + 25 * yesLambda
-      winScoreHope = winScore0 + 37 * yesLambda
+      winScoreHope = winScore0 + 37 * yesLambda + 100
   case () of
-    _ | not liftYes          -> return $ GrandValue abortScoreHope False Danger
-      | roboVal   >= Unknown -> return $ GrandValue abortScore0 False Danger
+    _ | not liftYes          -> return $ GrandValue abortScoreHope False roboVal
+      | roboVal   >= Unknown -> return $ GrandValue abortScore0 False roboVal
       | otherwise            -> return $ GrandValue winScoreHope False roboVal
  
 

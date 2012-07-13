@@ -86,35 +86,49 @@ evaluateHand depth hand
         Cont -> 
           head . sort <$> mapM (evaluateHand (depth-1)) "LRUDA"
 
-evaluatePlaying :: (Functor m, MonadIO m) => Bool -> LLT m GrandValue
-evaluatePlaying debugFlag = do
-  bd <- access llBoardL  
-  (w,h) <- getSize
-  guide <- liftIO $ VM.replicateM h $ VM.replicate w Unknown
-  probes <- liftIO $ newIORef $ Q.empty
+dijkstra guide initializer preModifier cond = do
+  bd <- access llBoardL    
+  probes <- liftIO $ newIORef $ Q.empty  
   loopPos $ \ r -> do
-    a <- readPos bd r
-    case a of
-      _ | a == '\\' || a == 'O' -> do
-           liftIO $ modifyIORef probes $ Q.insert (Happy 0, r) 
-        | a == '.' || a == ' ' || a == 'R' || a == 'L' -> return ()
-        | otherwise -> writePos guide r Danger
+    (writes,queues) <- initializer r
+    forM_ writes $ \x -> writePos guide r x 
+    forM_ queues $ \x -> liftIO $ modifyIORef probes $ Q.insert (x, r)     
+
   while (liftIO ((not . Q.null) <$> readIORef probes)) $ do
     (val0, r) <- liftIO $ Q.findMin <$> readIORef probes
     liftIO $ modifyIORef probes Q.deleteMin
-    ch <- readPos bd (r + Pos 0 1)
-    let val 
-          | ch == '*' = valAfraid val0
-          | otherwise = val0
+    val <- preModifier r val0
     oldVal <- head <$> readPosList guide r
-    when (val < oldVal && oldVal /= Danger) $ do
+    
+    when (cond val val0)$ do
       writePos guide r val
       forM_ directions $ \ (_, dr) -> do
         let nr = r + dr
         newVals <- readPosList guide nr
         forM_ newVals $ \ newVal -> do
           liftIO $ modifyIORef probes $ Q.insert (valPlus 1 val, nr)
-  
+
+evaluatePlaying :: (Functor m, MonadIO m) => Bool -> LLT m GrandValue
+evaluatePlaying debugFlag = do
+  bd <- access llBoardL  
+  (w,h) <- getSize
+  guide <- liftIO $ VM.replicateM h $ VM.replicate w Unknown
+
+  let initializer r = do
+        a <- readPos bd r
+        case () of
+         _ | a `elem` "O\\" -> return ([], [Happy 0])
+           | a `elem` " .R" -> return ([],[])
+           | otherwise      -> return ([Danger],[])
+      preModifier r val0 = do
+        ch <- readPos bd (r + Pos 0 1)
+        let val 
+              | ch == '*' = valAfraid val0
+              | otherwise = val0
+        return val
+      cond val val0
+  dijkstra guide initializer
+
   when debugFlag $ do
     withBackup $ do
       bd <- access llBoardL

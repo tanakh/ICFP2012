@@ -56,5 +56,5 @@ parse = Option
       _      -> AnswerFile str
     fr str = case str of
       "none" -> ReplayNothing
-      _      -> ReplayFilename str
+      _      -> ReplayFile str
       

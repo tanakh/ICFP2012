@@ -29,6 +29,7 @@ printe :: (MonadIO m, Show a) => a -> m ()
 printe = liftIO . hPutStrLn stderr . show
 
 yomiDepth = 3
+debugMode = False
 
 main = defaultMain greedySolver
 
@@ -68,7 +69,7 @@ valAfraid (Happy m) = Afraid m
 valAfraid x = x
 
 greedySolver = safetynet $ do
-  _ <- evaluatePlaying True
+  _ <- evaluatePlaying debugMode
   yomi <- sort <$> mapM (\c -> (,c) <$> evaluateHand yomiDepth c) "LRUDA"
   printe $ yomi
   let (_, cmd) = head yomi
@@ -158,7 +159,7 @@ evaluatePlaying debugFlag = do
         val <- head <$> readPosList guide r
         writePos bd r (val2char val)
       showBoard   
-  when (debugFlag&&False) $ do
+  when debugFlag $ do
     withBackup $ do
       bd <- access llBoardL
       loopPos $ \r -> do

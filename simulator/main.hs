@@ -65,6 +65,7 @@ kbdProvider mvAns mvState = forever $ do
       | str == "."           = [Ans.Cont 'W']
       | str == " "           = [Ans.Cont 'W']
       | str == "q"           = [Ans.Cont 'A']
+      | str == "u"           = [Ans.Undo]
       | codes == [8]         = [Ans.Undo]
       | codes == [27,91,65]  = [Ans.Cont 'U']
       | codes == [27,91,66]  = [Ans.Cont 'D']

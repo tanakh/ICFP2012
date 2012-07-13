@@ -1,7 +1,6 @@
 import Control.Applicative
 import Control.Exception
 import Control.Monad
-import Control.Monad.Base
 import Control.Monad.Trans
 import Control.Monad.Trans.Loop
 import qualified Data.Vector as V
@@ -17,13 +16,13 @@ main :: IO ()
 main = do
   [infile, ansfile] <- getArgs
   txt <- readFile infile
-  let bd0 = lines txt
+  let bd0 = reverse $ lines txt
       w = maximum $ map length bd0
       bdl = map (take w . (++ repeat ' ')) bd0
   bd <- V.thaw . V.fromList =<< mapM (U.thaw . U.fromList) bdl
-  mvs <- readFile ansfile
-  simulate bd mvs
-  undefined
+  mvs <- filter (`elem` "LRUDWA") <$> readFile ansfile
+  simulate bd $ mvs ++ "X"
+  showBoard bd
 
 simulate :: VM.IOVector (UM.IOVector Char)
             -> String
@@ -41,6 +40,9 @@ simulate bd mvs = do
     return $ y+1
 
   iterateLoopT (0, 0, cx, cy, mvs) $ \(step, lms ,cx, cy, (mv:mvs)) -> do
+    when (mv == 'X') $ exitWith 0
+
+    liftIO $ showBoard bd
     let move dx dy = do
           let (nx, ny) = (cx + dx, cy + dy)
           if nx >= 0 && nx < w && ny >= 0 && ny < h
@@ -71,16 +73,50 @@ simulate bd mvs = do
     foreach [0..h-1] $ \y -> do
       foreach [0..w-1] $ \x -> do
         liftIO $ writeCell nbd x y =<< readCell bd x y
-        when (j > 0) $ do
-          undefined
-
+        c <- liftIO $ readCell bd x y
+        when (c /= '*') continue
+        when (y > 0) $ do
+          b <- liftIO $ readCell bd x (y - 1)
+          when (b == ' ') $ do
+            liftIO $ writeCell nbd x (y - 1) '*'
+            liftIO $ writeCell nbd x y ' '
+            continue
+          when (b == '*') $ do
+            when (x + 1 < w) $ do
+              c1 <- liftIO $ readCell bd (x + 1) y
+              b1 <- liftIO $ readCell bd (x + 1) (y - 1)
+              when (c1 == ' ' && b1 == ' ') $ do
+                liftIO $ writeCell nbd (x + 1) (y - 1) '*'
+                liftIO $ writeCell nbd x y ' '
+                continue
+            when (x - 1 >= 0) $ do
+              c0 <- liftIO $ readCell bd (x - 1) y
+              b0 <- liftIO $ readCell bd (x - 1) (y - 1)
+              when (c0 == ' ' && b0 == ' ') $ do
+                liftIO $ writeCell nbd (x - 1) (y - 1) '*'
+                liftIO $ writeCell nbd x y ' '
+                continue
+          when (b == '\\' && x + 1 < w) $ do
+            c1 <- liftIO $ readCell bd (x + 1) y
+            b1 <- liftIO $ readCell bd (x + 1) (y - 1)
+            when (c1 == ' ' && b1 == ' ') $ do
+              liftIO $ writeCell nbd (x + 1) (y - 1) '*'
+              liftIO $ writeCell nbd x y ' '
+              continue
     return (step + 1, lms, nx, ny, mvs)
 
-  where
-    readCell bd x y = do
-      row <- GM.read bd y
-      GM.read row x
+readCell bd x y = do
+  row <- GM.read bd y
+  GM.read row x
 
-    writeCell bd x y v = do
-      row <- GM.read bd y
-      GM.write row x v
+writeCell bd x y v = do
+  row <- GM.read bd y
+  GM.write row x v
+
+showBoard bd = do
+  let h = GM.length bd
+  w <- GM.length <$> GM.read bd 0
+  forM_ [0..h-1] $ \y -> do
+    forM_ [0..w-1] $ \x -> do
+      putChar =<< readCell bd x y
+    putStrLn ""

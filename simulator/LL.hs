@@ -38,6 +38,7 @@ data LLState
     , llTotalLambdas :: Int
     , llFlood        :: Flood.Flood
     , llPos          :: Pos
+    , llLiftPos      :: Pos    
     , llBoard        :: Board
     , llWaterStep    :: Int
     , llHist         :: [LLState]
@@ -78,6 +79,13 @@ runLLT fld bdl m = do
       when (c == 'R') $ lift $ exitWith (x, y)
       return $ x+1
     return $ y+1
+  (cxLift, cyLift) <- iterateLoopT 0 $ \y -> do
+    iterateLoopT 0 $ \x -> do
+      when (x >= w) exit
+      c <- readCell bd x y
+      when (c == 'R') $ lift $ exitWith (x, y)
+      return $ x+1
+    return $ y+1
 
   lambdaNum <- liftIO $ do
     ior <- newIORef 0
@@ -92,6 +100,7 @@ runLLT fld bdl m = do
         , llLambdas = 0
         , llTotalLambdas = lambdaNum
         , llPos = Pos cx cy
+        , llLiftPos = Pos cxLift cyLift
         , llBoard = bd
         , llFlood = fld
         , llWaterStep = 0

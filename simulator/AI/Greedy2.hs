@@ -86,48 +86,65 @@ evaluateHand depth hand
         Cont -> 
           head . sort <$> mapM (evaluateHand (depth-1)) "LRUDA"
 
-dijkstra guide initializer preModifier cond = do
+dijkstra guide = do
   bd <- access llBoardL    
-  probes <- liftIO $ newIORef $ Q.empty  
+  probes <- liftIO $ newIORef $ Q.empty
   loopPos $ \ r -> do
-    (writes,queues) <- initializer r
-    forM_ writes $ \x -> writePos guide r x 
-    forM_ queues $ \x -> liftIO $ modifyIORef probes $ Q.insert (x, r)     
-
+    a <- readPos bd r
+    case a of
+      _ | a == '\\' || a == 'O' -> do
+           liftIO $ modifyIORef probes $ Q.insert (Happy 0, r) 
+        | a == '.' || a == ' ' || a == 'R' -> return ()
+        | otherwise -> writePos guide r Danger
   while (liftIO ((not . Q.null) <$> readIORef probes)) $ do
     (val0, r) <- liftIO $ Q.findMin <$> readIORef probes
     liftIO $ modifyIORef probes Q.deleteMin
-    val <- preModifier r val0
+    ch <- readPos bd (r + Pos 0 1)
+    let val 
+          | ch == '*' = valAfraid val0
+          | otherwise = val0
     oldVal <- head <$> readPosList guide r
-    
-    when (cond val val0)$ do
+    when (val < oldVal && oldVal /= Danger) $ do
       writePos guide r val
       forM_ directions $ \ (_, dr) -> do
         let nr = r + dr
         newVals <- readPosList guide nr
         forM_ newVals $ \ newVal -> do
           liftIO $ modifyIORef probes $ Q.insert (valPlus 1 val, nr)
+  
+dijkstraRobot guideRobot = do
+  bd <- access llBoardL    
+  probes <- liftIO $ newIORef $ Q.empty
+  loopPos $ \ r -> do
+    a <- readPos bd r
+    case a of
+      _ | a == 'R' -> do
+           liftIO $ modifyIORef probes $ Q.insert (Happy 0, r) 
+        | a `elem` " .R\\OL"-> return ()
+        | otherwise -> writePos guideRobot r Danger
+  while (liftIO ((not . Q.null) <$> readIORef probes)) $ do
+    (val, r) <- liftIO $ Q.findMin <$> readIORef probes
+    liftIO $ modifyIORef probes Q.deleteMin
+    oldVal <- head <$> readPosList guideRobot r
+    when (val < oldVal && oldVal /= Danger) $ do
+      writePos guideRobot r val
+      forM_ directions $ \ (_, dr) -> do
+        let nr = r + dr
+        newVals <- readPosList guideRobot nr
+        forM_ newVals $ \ newVal -> do
+          liftIO $ modifyIORef probes $ Q.insert (valPlus 1 val, nr)
+  
+
+
 
 evaluatePlaying :: (Functor m, MonadIO m) => Bool -> LLT m GrandValue
 evaluatePlaying debugFlag = do
   bd <- access llBoardL  
   (w,h) <- getSize
   guide <- liftIO $ VM.replicateM h $ VM.replicate w Unknown
-
-  let initializer r = do
-        a <- readPos bd r
-        case () of
-         _ | a `elem` "O\\" -> return ([], [Happy 0])
-           | a `elem` " .R" -> return ([],[])
-           | otherwise      -> return ([Danger],[])
-      preModifier r val0 = do
-        ch <- readPos bd (r + Pos 0 1)
-        let val 
-              | ch == '*' = valAfraid val0
-              | otherwise = val0
-        return val
-      cond val val0
-  dijkstra guide initializer
+  guideRobot <- liftIO $ VM.replicateM h $ VM.replicate w Unknown
+  dijkstra guide 
+  dijkstraRobot guideRobot
 
   when debugFlag $ do
     withBackup $ do
@@ -136,14 +153,43 @@ evaluatePlaying debugFlag = do
         val <- head <$> readPosList guide r
         writePos bd r (val2char val)
       showBoard   
+  when debugFlag $ do
+    withBackup $ do
+      bd <- access llBoardL
+      loopPos $ \r -> do
+        val <- head <$> readPosList guideRobot r
+        writePos bd r (val2char val)
+      showBoard   
   
   remaining <- access llLambdasL        
   totaling <- access llTotalLambdasL
   roboPos <- access llPosL          
+  liftPos <- access llLiftPosL          
   roboVal <- head <$> readPosList guide roboPos
+  liftVal <- head <$> readPosList guideRobot liftPos
+  
+
   winScore0 <- abortScore
   abortScore0 <- abortScore
   
-  if roboVal < Unknown
-    then return $ GrandValue winScore0 False roboVal        
-    else return $ GrandValue abortScore0 False Danger
+  yesLambdaR <- liftIO $ newIORef 0
+  noLambdaR  <- liftIO $ newIORef 0
+  loopPos $ \r -> do
+    c <- readPos bd r
+    when (c /= '\\') continue
+    val <- head <$> readPosList guideRobot r
+    if (val < Unknown)
+       then liftIO $ modifyIORef yesLambdaR  (1+)
+       else liftIO $ modifyIORef noLambdaR   (1+)
+  
+  yesLambda <- liftIO $ readIORef yesLambdaR
+  noLambda <- liftIO $ readIORef noLambdaR
+  let liftYes :: Bool 
+      liftYes = liftVal < Unknown && noLambda == 0
+      abortScoreHope = abortScore0 + 50 * yesLambda
+      winScoreHope = winScore0 + 75 * yesLambda
+  case () of
+    _ | not liftYes          -> return $ GrandValue abortScoreHope False Danger
+      | roboVal   >= Unknown -> return $ GrandValue abortScore0 False Danger
+      | otherwise            -> return $ GrandValue winScoreHope False roboVal
+ 

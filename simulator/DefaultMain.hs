@@ -23,7 +23,7 @@ defaultMain theSolver = do
       bd0 = reverse txtB
       w = maximum $ map length bd0
       bd = map (take w . (++ repeat ' ')) bd0
-      fld = Flood.readFlood $ tail txtM
+      fld = Flood.readFlood $ drop 1 txtM
   ansMVar <- newEmptyMVar
   stateMVar <- newEmptyMVar
   solver <- case Opt.answer opt of

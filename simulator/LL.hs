@@ -204,11 +204,9 @@ undo = do
 
 simulateStep :: (Functor m, Monad m, MonadIO m) => Char -> LLT m Result
 simulateStep mv = do
+  fld  <- access llFloodL
   step <- access llStepL
-  bd <- access llBoardL
-  fld <- access llFloodL
-  Pos cx cy <- access llPosL
-  lms <- access llLambdasL
+  bd   <- access llBoardL
   lambdaNum <- access llTotalLambdasL
   (w, h) <- getSize
 
@@ -224,6 +222,7 @@ simulateStep mv = do
     'W' -> return Cont
     'A' -> return Cont -- abort process is below
     _   -> return Skip -- next step
+  lms <- access llLambdasL
 
   once $ do
     case cont of
@@ -233,8 +232,8 @@ simulateStep mv = do
 
     -- update
     nbd <- liftIO $ VM.replicateM h $ UM.replicate w ' '
-    foreach [0..h-1] $ \y -> do
-      foreach [0..w-1] $ \x -> do
+    forM_ [0..h-1] $ \y -> do
+      forM_ [0..w-1] $ \x -> do
         writeCell nbd x y =<< readCell bd x y
 
         c  <- readCell bd x       y

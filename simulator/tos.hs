@@ -1,36 +1,26 @@
+import Move
+import Cell
+
 import System.Environment (getArgs)
 import Control.Applicative
+import Data.Array
+import Data.List
 
-data Cell = Robot | Wall | Rock | Lambda | ClosedLift | OpenLift | Earth | Empty
 type Mine = Array (Int,Int) Cell
-
-instance Show Cell where
-  show Robot = "R"
-  show Wall = "#"
-  show Rock = "*"
-  show Lambda = "\\"
-  show ClosedLift = "L"
-  show OpenLift = "O"
-  show Earth = "."
-  show Empty = " "
-
 
 main = do
   (filename:_) <- getArgs
   mine <- parseMine <$> readFile filename
   moves <- parseMoves <$> getContents
-  undefined
-
+  print (mine,moves)
 
 parseMine :: String -> Mine
-parseMine = unlines
+parseMine = f . map readCells . reverse . lines where
+  f x = let h = length x
+            w = maximum (map length x)
+        in accumArray (flip const) Empty ((1,1),(h,w))
+                      [((i,j),c) | (i,y) <- zip [1..] x, (j,c) <- zip [1..] y]
 
 parseMoves :: String -> [Move]
-parseMoves = concatMap f where
-  f 'L' = Left
-  f 'R' = Right
-  f 'U' = Up
-  f 'D' = Down
-  f 'W' = Wait
-  f 'A' = Abort
-
+parseMoves = map (read . singleton) . filter (`elem` "LRUDWA") where
+  singleton a = [a]

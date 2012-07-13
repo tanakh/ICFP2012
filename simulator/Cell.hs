@@ -1,7 +1,7 @@
 module Cell
   ( Cell (..)
   , showCell, showCells
-  , readCell
+  , readCell, readCells
   ) where
 
 data Cell = Robot | Wall | Rock | Lambda | ClosedLift | OpenLift | Earth | Empty
@@ -18,14 +18,17 @@ showCell Empty = " "
 
 showCells = concatMap showCell
 
-readCell 'R' = Robot
-readCell '#' = Wall
-readCell '*' = Rock
-readCell '\\'= Lambda
-readCell 'L' = ClosedLift
-readCell 'O' = OpenLift
-readCell '.' = Earth
-readCell ' ' = Empty
--- readCell _ = 
+readCell [] = error "readCell"
+readCell s = readCell' . head
 
-readCells = map readCell
+readCell' 'R' = Robot
+readCell' '#' = Wall
+readCell' '*' = Rock
+readCell' '\\'= Lambda
+readCell' 'L' = ClosedLift
+readCell' 'O' = OpenLift
+readCell' '.' = Earth
+readCell' ' ' = Empty
+-- readCell' _ = 
+
+readCells = map readCell'

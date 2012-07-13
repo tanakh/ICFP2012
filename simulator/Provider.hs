@@ -2,11 +2,14 @@ module Provider (
   Provider,
   kbdProvider,
   fileProvider,
+  providedSolver,
   blackhole
        ) where
 
 import Control.Applicative
 import Control.Monad
+import Control.Monad.Trans
+import Control.Monad.State.Strict
 import Control.Concurrent
 import System.Environment
 import System.IO
@@ -14,6 +17,12 @@ import System.IO
 
 import qualified Ans as Ans
 import LL
+
+providedSolver :: (MonadIO m) => MVar Ans.Ans -> MVar LLState -> Solver m
+providedSolver mvAns mvState = do
+  st <- get
+  liftIO $ putMVar mvState st
+  liftIO $ takeMVar mvAns
 
 type Provider = MVar Ans.Ans -> MVar LLState -> IO ()
 

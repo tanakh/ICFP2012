@@ -11,8 +11,6 @@ import qualified Option as Opt
 import           Provider
 
 
-
-
 main :: IO ()
 main = do
   opt <- Opt.parseIO
@@ -24,14 +22,18 @@ main = do
       bd = map (take w . (++ repeat ' ')) bd0
   ansMVar <- newEmptyMVar
   stateMVar <- newEmptyMVar
-  provider <- case Opt.answer opt of
-    Opt.AnswerFile ansfn -> return $ fileProvider ansfn ansMVar stateMVar
-    Opt.Auto -> return $ autoProvider ansMVar stateMVar
+  solver <- case Opt.answer opt of
+    Opt.AnswerFile ansfn -> do
+      forkIO $ fileProvider ansfn ansMVar stateMVar
+      return $ providedSolver ansMVar stateMVar
     Opt.Keyboard -> do
       hSetBuffering stdout NoBuffering
       hSetBuffering stdin NoBuffering
       hSetEcho stdin False
-      return $ kbdProvider ansMVar stateMVar
-  forkIO $ provider
-  print =<< simulate opt bd ansMVar stateMVar
+      forkIO $ kbdProvider ansMVar stateMVar
+      return $ providedSolver ansMVar stateMVar
+    Opt.Auto -> do
+      return $ autoSolver
+      
+  print =<< simulate opt bd solver
 

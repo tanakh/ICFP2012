@@ -16,7 +16,7 @@ cabal-version:       >=1.8
 
 executable ll-simulator
   main-is:             main.hs
-  other-modules:       LL, Pos, Option
+  other-modules:       Ans, LL,  Option, Pos
   build-depends:       base ==4.5.*
                      , vector
                      , mtl

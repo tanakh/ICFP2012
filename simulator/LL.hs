@@ -5,6 +5,7 @@
 module LL where
 
 import Control.Applicative
+import Control.Concurrent
 import Control.Exception
 import Control.Monad
 import Control.Monad.State
@@ -19,6 +20,7 @@ import qualified Data.Vector.Storable.Mutable as UM
 import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Generic.Mutable as GM
 
+import qualified Ans as Ans
 import Pos
 
 type Board = VM.IOVector (UM.IOVector Char)
@@ -97,10 +99,14 @@ scoreResult (Abort n) = n
 scoreResult (Dead n) = n
 scoreResult _ = assert False undefined
 
-simulate :: [String] -> String -> IO Result
-simulate bd mvs = do
+simulate :: [String] -> MVar Ans.Ans -> IO Result
+simulate bd mVarAns = do
   runLLT bd $ once $ do
-    foreach mvs $ \mv -> do
+    while (return True) $ do
+      ans <- liftIO $ takeMVar mVarAns
+      let mv = case ans of
+            Ans.End -> 'A'
+            Ans.Cont ch -> ch
       res <- lift . lift $ simulateStep mv
       case res of
         Cont -> continue

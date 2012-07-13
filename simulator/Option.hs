@@ -3,6 +3,16 @@ module Option where
 import Options.Applicative
 import Options.Applicative.Builder
 
+data Option = 
+  Option {
+    input :: Input,
+    answer :: Answer
+  }
+  
+data Input  = InputFile FilePath | Stdin
+data Answer = AnswerFile FilePath | Keyboard | Auto
+
+
 parseIO :: IO Option
 parseIO = execParser $ info (helper <*> parse)
    ( fullDesc
@@ -25,12 +35,3 @@ parse = Option
     fa str = case str of
       "kbd"  -> Keyboard
       _      -> AnswerFile str
-data Option = 
-  Option {
-    input :: Input,
-    answer :: Answer
-  }
-  
-data Input  = InputFile FilePath | Stdin
-data Answer = AnswerFile FilePath | Keyboard | Auto
-

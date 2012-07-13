@@ -38,6 +38,7 @@ data LLState
     , llTotalLambdas :: Int
     , llFlood        :: Flood.Flood
     , llPos          :: Pos
+    , llLiftPos      :: Pos    
     , llBoard        :: Board
     , llWaterStep    :: Int
     , llHist         :: [LLState]
@@ -78,6 +79,13 @@ runLLT fld bdl m = do
       when (c == 'R') $ lift $ exitWith (x, y)
       return $ x+1
     return $ y+1
+  (cxLift, cyLift) <- iterateLoopT 0 $ \y -> do
+    iterateLoopT 0 $ \x -> do
+      when (x >= w) exit
+      c <- readCell bd x y
+      when (c == 'R') $ lift $ exitWith (x, y)
+      return $ x+1
+    return $ y+1
 
   lambdaNum <- liftIO $ do
     ior <- newIORef 0
@@ -92,6 +100,7 @@ runLLT fld bdl m = do
         , llLambdas = 0
         , llTotalLambdas = lambdaNum
         , llPos = Pos cx cy
+        , llLiftPos = Pos cxLift cyLift
         , llBoard = bd
         , llFlood = fld
         , llWaterStep = 0
@@ -114,16 +123,33 @@ scoreResult (Abort n) = n
 scoreResult (Dead n) = n
 scoreResult _ = assert False undefined
 
+winScore, abortScore, deathScore :: MonadIO m => LLT m Int  
+winScore = do
+  step <- access llStepL
+  lms <- access llLambdasL  
+  return  (lms * 75 - step)
+  
+abortScore = do
+  step <- access llStepL
+  lms <- access llLambdasL 
+  return (lms * 50 - step)
+  
+deathScore = do
+  step <- access llStepL
+  lms <- access llLambdasL     
+  return (lms * 25 - step)
+
 showStatus :: MonadIO m => LLT m ()
 showStatus = do
   step <- access llStepL
   lms <- access llLambdasL
   lambdaNum <- access llTotalLambdasL
+  score1 <- winScore
+  score2 <- abortScore
+  score3 <- deathScore
   liftIO $ printf "step: %d, lambdas: %03d/%03d, score: %d/%d/%d\n"
     step lms lambdaNum
-    (lms * 75 - step)
-    (lms * 50 - step)
-    (lms * 25 - step)
+    score1 score2 score3
 
   fld <- access llFloodL
   ws <- access llWaterStepL

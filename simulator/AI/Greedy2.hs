@@ -28,12 +28,24 @@ import           DefaultMain
 main = defaultMain greedySolver
 
 data Value =  Happy Int | Afraid Int | Unknown | Danger deriving (Eq, Ord, Show)
-data GrandValue = WinGame Int
-                | Playing Int Value
-                | AbortGame Int
-                | StuckGame
-                | DeadGame Int deriving (Eq, Ord, Show)
 
+data GrandValue = 
+  GrandValue
+  {expectedScore :: Int,
+   gameHasEnded :: Bool,
+   playValue :: Value
+  }deriving (Eq, Show)
+
+
+grandValue n = GrandValue n True (Happy 0)
+
+instance Ord GrandValue where
+-- the smaller, the better
+  compare (GrandValue ex1 end1 val1) (GrandValue ex2 end2 val2) 
+    | ex1 /= ex2 = compare ex2 ex1
+    | end1 /= end2 = compare end1 end2
+    | otherwise = compare val1 val2
+  
 val2char :: Value -> Char
 val2char Unknown = '?'
 val2char Danger  = '!'
@@ -69,18 +81,15 @@ evaluateHand depth hand
             | roboPos0 == roboPos1 = Dead 0
             | otherwise            = result0
       case result of
-        Win n -> return $ WinGame (-n)
-        Abort n -> return $ AbortGame (-n)
-        Dead n -> return $ DeadGame (-n)
-        Skip -> return $ DeadGame 99999999
-        Cont ->
+        Win n -> return $ grandValue n
+        Abort n -> return $ grandValue n
+        Dead n -> return $ grandValue n
+        Skip -> return $ grandValue (-9999999)
+        Cont -> 
           head . sort <$> mapM (evaluateHand (depth-1)) "LRUDA"
 
-evaluatePlaying :: (Functor m, MonadIO m) => Bool -> LLT m GrandValue
-evaluatePlaying debugFlag = do
-  bd <- access llBoardL
-  (w,h) <- getSize
-  guide <- liftIO $ VM.replicateM h $ VM.replicate w Unknown
+dijkstra guide = do
+  bd <- access llBoardL    
   probes <- liftIO $ newIORef $ Q.empty
   loopPos $ \ r -> do
     a <- readPos bd r
@@ -104,19 +113,86 @@ evaluatePlaying debugFlag = do
         newVals <- readPosList guide nr
         forM_ newVals $ \ newVal -> do
           liftIO $ modifyIORef probes $ Q.insert (valPlus 1 val, nr)
+  
+dijkstraRobot guideRobot = do
+  bd <- access llBoardL    
+  probes <- liftIO $ newIORef $ Q.empty
+  loopPos $ \ r -> do
+    a <- readPos bd r
+    case a of
+      _ | a == 'R' -> do
+           liftIO $ modifyIORef probes $ Q.insert (Happy 0, r) 
+        | a `elem` " .R\\OL"-> return ()
+        | otherwise -> writePos guideRobot r Danger
+  while (liftIO ((not . Q.null) <$> readIORef probes)) $ do
+    (val, r) <- liftIO $ Q.findMin <$> readIORef probes
+    liftIO $ modifyIORef probes Q.deleteMin
+    oldVal <- head <$> readPosList guideRobot r
+    when (val < oldVal && oldVal /= Danger) $ do
+      writePos guideRobot r val
+      forM_ directions $ \ (_, dr) -> do
+        let nr = r + dr
+        newVals <- readPosList guideRobot nr
+        forM_ newVals $ \ newVal -> do
+          liftIO $ modifyIORef probes $ Q.insert (valPlus 1 val, nr)
+  
 
-  when (False && debugFlag) $ do
+
+
+evaluatePlaying :: (Functor m, MonadIO m) => Bool -> LLT m GrandValue
+evaluatePlaying debugFlag = do
+  bd <- access llBoardL  
+  (w,h) <- getSize
+  guide <- liftIO $ VM.replicateM h $ VM.replicate w Unknown
+  guideRobot <- liftIO $ VM.replicateM h $ VM.replicate w Unknown
+  dijkstra guide 
+  dijkstraRobot guideRobot
+
+  when debugFlag $ do
     withBackup $ do
       bd <- access llBoardL
       loopPos $ \r -> do
         val <- head <$> readPosList guide r
         writePos bd r (val2char val)
-      showBoard
-
-  remaining <- access llLambdasL
+      showBoard   
+  when debugFlag $ do
+    withBackup $ do
+      bd <- access llBoardL
+      loopPos $ \r -> do
+        val <- head <$> readPosList guideRobot r
+        writePos bd r (val2char val)
+      showBoard   
+  
+  remaining <- access llLambdasL        
   totaling <- access llTotalLambdasL
-  roboPos <- access llPosL
+  roboPos <- access llPosL          
+  liftPos <- access llLiftPosL          
   roboVal <- head <$> readPosList guide roboPos
-  if roboVal < Unknown
-    then return $ Playing (totaling-remaining) roboVal
-    else return $ StuckGame
+  liftVal <- head <$> readPosList guideRobot liftPos
+  
+
+  winScore0 <- abortScore
+  abortScore0 <- abortScore
+  
+  yesLambdaR <- liftIO $ newIORef 0
+  noLambdaR  <- liftIO $ newIORef 0
+  loopPos $ \r -> do
+    c <- readPos bd r
+    when (c /= '\\') continue
+    val <- head <$> readPosList guideRobot r
+    if (val < Unknown)
+       then liftIO $ modifyIORef yesLambdaR  (1+)
+       else liftIO $ modifyIORef noLambdaR   (1+)
+  
+  yesLambda <- liftIO $ readIORef yesLambdaR
+  noLambda <- liftIO $ readIORef noLambdaR
+  let liftYes :: Bool 
+      liftYes = liftVal < Unknown && noLambda == 0
+      abortScoreHope = abortScore0 + 50 * yesLambda
+      winScoreHope = winScore0 + 75 * yesLambda
+  case () of
+    _ | not liftYes          -> return $ GrandValue abortScoreHope False Danger
+      | roboVal   >= Unknown -> return $ GrandValue abortScore0 False Danger
+      | otherwise            -> return $ GrandValue winScoreHope False roboVal
+ 
+

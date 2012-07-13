@@ -1,4 +1,5 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses, UndecidableInstances #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module LL where
@@ -36,18 +37,19 @@ newtype LLT m a
            , Monad, MonadIO
            , MonadState LLState, MonadTrans)
 
-data Result
-  = Win Int
-  | Abort Int
-  | Dead Int
-  | Cont
-  deriving (Show)
+backupState :: MonadIO m => LLT m LLState
+backupState = do
+  bd <- access llBoardL
+  nbd <- liftIO $ V.unsafeThaw =<< V.mapM UM.clone =<< V.unsafeFreeze bd
+  st <- get
+  return $ st { llBoard = nbd }
 
-scoreResult :: Result -> Int
-scoreResult (Win n) = n
-scoreResult (Abort n) = n
-scoreResult (Dead n) = n
-scoreResult _ = assert False undefined
+withBackup :: MonadIO m => LLT m a -> LLT m a
+withBackup m = do
+  st <- backupState
+  ret <- m
+  put st
+  return ret
 
 runLLT :: MonadIO m => [String] -> LLT m a -> m a
 runLLT bdl m = do
@@ -79,6 +81,29 @@ runLLT bdl m = do
         , llBoard = bd
         }
   evalStateT (unLLT m) initState
+
+data Result
+  = Win Int
+  | Abort Int
+  | Dead Int
+  | Cont
+  deriving (Show)
+
+scoreResult :: Result -> Int
+scoreResult (Win n) = n
+scoreResult (Abort n) = n
+scoreResult (Dead n) = n
+scoreResult _ = assert False undefined
+
+simulate :: [String] -> String -> IO Result
+simulate bd mvs = do
+  runLLT bd $ once $ do
+    foreach mvs $ \mv -> do
+      res <- lift . lift $ simulateStep mv
+      case res of
+        Cont -> continue
+        _ -> lift $ exitWith res
+    exitWith Cont
 
 simulateStep :: (Functor m, Monad m, MonadIO m) => Char -> LLT m Result
 simulateStep mv = do
@@ -127,12 +152,10 @@ simulateStep mv = do
         liftIO $ writeCell nbd x y =<< readCell bd x y
         c <- liftIO $ readCell bd x y
 
-        when (c == 'L') $ do
-          when (lms == lambdaNum) $ do
-            liftIO $ writeCell nbd x y 'O'
-          continue
-
+        when (c == 'L' && lms == lambdaNum) $
+          liftIO $ writeCell nbd x y 'O'
         when (c /= '*') continue
+
         when (y > 0) $ do
           b <- liftIO $ readCell bd x (y - 1)
           when (b == ' ') $ do
@@ -175,20 +198,10 @@ simulateStep mv = do
     liftIO $ GM.move bd nbd
 
     lift $ do
-      llStepL ~= step + 1
+      llStepL += 1
       llLambdasL ~= lms
       llPosL ~= Pos nx ny
       return Cont
-
-simulate :: [String] -> String -> IO Result
-simulate bd mvs = do
-  runLLT bd $ once $ do
-    foreach mvs $ \mv -> do
-      res <- lift . lift $ simulateStep mv
-      case res of
-        Cont -> continue
-        _ -> lift $ exitWith res
-    exitWith Cont
 
 readCell bd x y = do
   row <- GM.read bd y

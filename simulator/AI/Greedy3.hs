@@ -158,7 +158,7 @@ evaluatePlaying debugFlag = do
         val <- head <$> readPosList guide r
         writePos bd r (val2char val)
       showBoard   
-  when debugFlag $ do
+  when (debugFlag&&False) $ do
     withBackup $ do
       bd <- access llBoardL
       loopPos $ \r -> do

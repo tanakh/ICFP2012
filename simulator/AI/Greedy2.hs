@@ -28,12 +28,22 @@ import           DefaultMain
 main = defaultMain greedySolver
 
 data Value =  Happy Int | Afraid Int | Unknown | Danger deriving (Eq, Ord, Show)
-data GrandValue = WinGame Int 
-                | Playing Int Value 
-                | AbortGame Int 
-                | StuckGame
-                | DeadGame Int deriving (Eq, Ord, Show)
+data GrandValue = 
+  GrandValue
+  {expectedScore :: Int,
+   gameHasEnded :: Bool,
+   playValue :: Value
+  }deriving (Eq, Show)
 
+grandValue n = GrandValue n True (Happy 0)
+
+instance Ord GrandValue where
+-- the smaller, the better
+  compare (GrandValue ex1 end1 val1) (GrandValue ex2 end2 val2) 
+    | ex1 /= ex2 = compare ex2 ex1
+    | end1 /= end2 = compare end1 end2
+    | otherwise = compare val1 val2
+  
 val2char :: Value -> Char
 val2char Unknown = '?'
 val2char Danger  = '!'
@@ -69,10 +79,10 @@ evaluateHand depth hand
             | roboPos0 == roboPos1 = Dead 0
             | otherwise            = result0
       case result of
-        Win n -> return $ WinGame (-n)
-        Abort n -> return $ AbortGame (-n)
-        Dead n -> return $ DeadGame (-n)
-        Skip -> return $ DeadGame 99999999
+        Win n -> return $ grandValue n
+        Abort n -> return $ grandValue n
+        Dead n -> return $ grandValue n
+        Skip -> return $ grandValue (-9999999)
         Cont -> 
           head . sort <$> mapM (evaluateHand (depth-1)) "LRUDA"
 
@@ -87,7 +97,7 @@ evaluatePlaying debugFlag = do
     case a of
       _ | a == '\\' || a == 'O' -> do
            liftIO $ modifyIORef probes $ Q.insert (Happy 0, r) 
-        | a == '.' || a == ' ' || a == 'R' -> return ()
+        | a == '.' || a == ' ' || a == 'R' || a == 'L' -> return ()
         | otherwise -> writePos guide r Danger
   while (liftIO ((not . Q.null) <$> readIORef probes)) $ do
     (val0, r) <- liftIO $ Q.findMin <$> readIORef probes
@@ -117,6 +127,9 @@ evaluatePlaying debugFlag = do
   totaling <- access llTotalLambdasL
   roboPos <- access llPosL          
   roboVal <- head <$> readPosList guide roboPos
+  winScore0 <- abortScore
+  abortScore0 <- abortScore
+  
   if roboVal < Unknown
-    then return $ Playing (totaling-remaining) roboVal        
-    else return $ StuckGame
+    then return $ GrandValue winScore0 False roboVal        
+    else return $ GrandValue abortScore0 False Danger

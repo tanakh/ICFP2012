@@ -114,16 +114,33 @@ scoreResult (Abort n) = n
 scoreResult (Dead n) = n
 scoreResult _ = assert False undefined
 
+winScore, abortScore, deathScore :: MonadIO m => LLT m Int  
+winScore = do
+  step <- access llStepL
+  lms <- access llLambdasL  
+  return  (lms * 75 - step)
+  
+abortScore = do
+  step <- access llStepL
+  lms <- access llLambdasL 
+  return (lms * 50 - step)
+  
+deathScore = do
+  step <- access llStepL
+  lms <- access llLambdasL     
+  return (lms * 25 - step)
+
 showStatus :: MonadIO m => LLT m ()
 showStatus = do
   step <- access llStepL
   lms <- access llLambdasL
   lambdaNum <- access llTotalLambdasL
+  score1 <- winScore
+  score2 <- abortScore
+  score3 <- deathScore
   liftIO $ printf "step: %d, lambdas: %03d/%03d, score: %d/%d/%d\n"
     step lms lambdaNum
-    (lms * 75 - step)
-    (lms * 50 - step)
-    (lms * 25 - step)
+    score1 score2 score3
 
   fld <- access llFloodL
   ws <- access llWaterStepL

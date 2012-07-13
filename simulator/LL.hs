@@ -21,6 +21,7 @@ import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Generic.Mutable as GM
 
 import qualified Ans as Ans
+import qualified Option as Opt
 import Pos
 
 type Board = VM.IOVector (UM.IOVector Char)
@@ -99,15 +100,20 @@ scoreResult (Abort n) = n
 scoreResult (Dead n) = n
 scoreResult _ = assert False undefined
 
-simulate :: [String] -> MVar Ans.Ans -> IO Result
-simulate bd mVarAns = do
+simulate :: Opt.Option -> [String] -> MVar Ans.Ans -> IO Result
+simulate opt bd mVarAns = do
   runLLT bd $ once $ do
     while (return True) $ do
+      when (Opt.verbose opt) $ do
+        lift . lift $ do
+          bd <- access llBoardL
+          liftIO $ showBoard bd
       ans <- liftIO $ takeMVar mVarAns
       let mv = case ans of
             Ans.End -> 'A'
             Ans.Cont ch -> ch
       res <- lift . lift $ simulateStep mv
+
       case res of
         Cont -> continue
         _ -> lift $ exitWith res
@@ -124,7 +130,6 @@ simulateStep mv = do
   let h = GM.length bd
   w <- liftIO $ GM.length <$> GM.read bd 0
 
-  liftIO $ showBoard bd
   let move dx dy = do
           let (nx, ny) = (cx + dx, cy + dy)
           if nx >= 0 && nx < w && ny >= 0 && ny < h

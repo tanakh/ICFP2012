@@ -1,4 +1,5 @@
 import Control.Applicative
+import Control.Monad
 import Control.Concurrent
 import System.Environment
 import System.IO
@@ -27,17 +28,28 @@ main = do
       return $ kbdProvider ansMVar
   let 
   forkIO $ provider
-  print =<< simulate bd ansMVar
+  print =<< simulate opt bd ansMVar
 
 fileProvider :: FilePath -> MVar Ans.Ans ->  IO ()
 fileProvider fn mvar = do
   mvs <- filter (`elem` "LRUDWA") <$> readFile fn
   mapM_ (putMVar mvar) $ map Ans.Cont mvs
   putMVar mvar Ans.End
-  
+
 autoProvider :: MVar Ans.Ans -> IO ()  
 autoProvider mv = putMVar mv Ans.End                
 
 kbdProvider :: MVar Ans.Ans -> IO ()  
-kbdProvider mv = putMVar mv Ans.End                
+kbdProvider mv = forever $ do
+  c <- getChar
+  let cmd = case c of
+        'h' -> "L"
+        'j' -> "D"
+        'k' -> "U"
+        'l' -> "R"
+        '.' -> "W"
+        'q' -> "A"
+        _   -> []
+  forM_ cmd $ \c ->
+    putMVar mv (Ans.Cont c)
 

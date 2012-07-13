@@ -22,6 +22,7 @@ import qualified Data.Vector.Storable.Mutable as UM
 import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Generic.Mutable as GM
 import System.FilePath
+import System.IO
 import Text.Printf
 
 import qualified Ans as Ans
@@ -128,12 +129,12 @@ winScore = do
   step <- access llStepL
   lms <- access llLambdasL  
   return  (lms * 75 - step)
-  
+
 abortScore = do
   step <- access llStepL
   lms <- access llLambdasL 
   return (lms * 50 - step)
-  
+
 deathScore = do
   step <- access llStepL
   lms <- access llLambdasL     
@@ -167,8 +168,8 @@ showBoard = do
   liftIO $ do
     forM_ [h-1, h-2 .. 0] $ \y -> do
       forM_ [0..w-1] $ \x -> do
-        putChar =<< readCell bd x y
-      putStrLn $ if y < wl then "~~~~" else "    "
+        hPutChar stderr =<< readCell bd x y
+      hPutStrLn stderr $ if y < wl then "~~~~" else "    "
 
 type Solver m = LLT m Ans.Ans
 
@@ -218,7 +219,7 @@ simulate opt fld bd solver = do
 
     when (Opt.input opt == Opt.Stdin) $ do
       liftIO $ putStrLn rep
-
+      liftIO $ hFlush stdout
     return res
 
 undo :: MonadIO m => LLT m ()

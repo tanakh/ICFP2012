@@ -24,6 +24,10 @@ import           LL
 import           Pos
 import           DefaultMain
 
+
+printe :: (MonadIO m, Show a) => a -> m ()
+printe = liftIO . hPutStrLn stderr . show
+
 yomiDepth = 3
 
 main = defaultMain greedySolver
@@ -46,7 +50,7 @@ instance Ord GrandValue where
     | ex1 /= ex2 = compare ex2 ex1
     | end1 /= end2 = compare end1 end2
     | otherwise = compare val1 val2
-  
+
 val2char :: Value -> Char
 val2char Unknown = '?'
 val2char Danger  = '!'
@@ -66,7 +70,7 @@ valAfraid x = x
 greedySolver = safetynet $ do
   _ <- evaluatePlaying True
   yomi <- sort <$> mapM (\c -> (,c) <$> evaluateHand yomiDepth c) "LRUDA"
-  liftIO $ hPutStrLn stderr $ show yomi
+  printe $ yomi
   let (_, cmd) = head yomi
   return $ Ans.Cont cmd
 
@@ -112,7 +116,7 @@ dijkstra guide = do
         newVals <- readPosList guide nr
         forM_ newVals $ \ newVal -> do
           liftIO $ modifyIORef probes $ Q.insert (valPlus 1 val, nr)
-  
+
 dijkstraRobot guideRobot = do
   bd <- access llBoardL    
   probes <- liftIO $ newIORef $ Q.empty
@@ -134,7 +138,7 @@ dijkstraRobot guideRobot = do
         newVals <- readPosList guideRobot nr
         forM_ newVals $ \ newVal -> do
           liftIO $ modifyIORef probes $ Q.insert (valPlus 1 val, nr)
-  
+
 
 
 
@@ -161,18 +165,18 @@ evaluatePlaying debugFlag = do
         val <- head <$> readPosList guideRobot r
         writePos bd r (val2char val)
       showBoard   
-  
+
   remaining <- access llLambdasL        
   totaling <- access llTotalLambdasL
   roboPos <- access llPosL          
   liftPos <- access llLiftPosL          
   roboVal <- head <$> readPosList guide roboPos
   liftVal <- head <$> readPosList guideRobot liftPos
-  
+
 
   winScore0 <- abortScore
   abortScore0 <- abortScore
-  
+
   yesLambdaR <- liftIO $ newIORef 0
   noLambdaR  <- liftIO $ newIORef 0
   loopPos $ \r -> do

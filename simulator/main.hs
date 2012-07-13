@@ -1,9 +1,15 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TemplateHaskell #-}
+
 import Control.Applicative
 import Control.Exception
 import Control.Monad
+import Control.Monad.State
 import Control.Monad.Trans
 import Control.Monad.Trans.Loop
 import Data.IORef
+import Data.Lens
+import Data.Lens.Template
 import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as VM
 import qualified Data.Vector.Storable as U
@@ -12,6 +18,24 @@ import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Generic.Mutable as GM
 
 import System.Environment
+
+data Pos = Pos { px :: Int, py :: Int }
+
+data LLState
+  = LLState
+    { llStep :: Int
+    , llLambdas :: Int
+    , llTotalLambdas :: Int
+    , llPos :: Pos
+    , llBoard :: VM.IOVector (UM.IOVector Char)
+    }
+nameMakeLens ''LLState $ \name -> Just (name ++ "L")
+
+newtype LLT m a
+  = LLT { unLLT :: StateT LLState m a }
+  deriving ( Functor, Applicative
+           , Monad, MonadIO
+           , MonadState LLState, MonadTrans)
 
 main :: IO ()
 main = do
@@ -22,36 +46,36 @@ main = do
       bdl = map (take w . (++ repeat ' ')) bd0
   bd <- V.thaw . V.fromList =<< mapM (U.thaw . U.fromList) bdl
   mvs <- filter (`elem` "LRUDWA") <$> readFile ansfile
-  score <- simulate bd $ mvs ++ "X"
+  result <- simulate bd mvs
+  print result
   showBoard bd
-  print score
 
-simulate :: VM.IOVector (UM.IOVector Char)
-            -> String
-            -> IO Int
-simulate bd mvs = do
+data Result
+  = Win Int
+  | Abort Int
+  | Dead Int
+  | Cont
+  deriving (Show)
+
+scoreResult :: Result -> Int
+scoreResult (Win n) = n
+scoreResult (Abort n) = n
+scoreResult (Dead n) = n
+scoreResult _ = assert False undefined
+
+simulateStep :: (Functor m, Monad m, MonadIO m) => Char -> LLT m Result
+simulateStep mv = do
+  step <- access llStepL
+  bd <- access llBoardL
+  Pos cx cy <- access llPosL
+  lms <- access llLambdasL
+  lambdaNum <- access llTotalLambdasL
+
   let h = GM.length bd
-  w <- GM.length <$> GM.read bd 0
-  (cx, cy) <- iterateLoopT 0 $ \y -> do
-    iterateLoopT 0 $ \x -> do
-      when (x >= w) exit
-      c <- liftIO $ readCell bd x y
-      when (c == 'R') $ lift $ exitWith (x, y)
-      return $ x+1
-    return $ y+1
+  w <- liftIO $ GM.length <$> GM.read bd 0
 
-  ior <- newIORef 0
-  forM_ [0..h-1] $ \y -> do
-    forM_ [0..w-1] $ \x -> do
-      c <- liftIO $ readCell bd x y
-      when (c == '\\') $ modifyIORef ior (+1)
-  lambdaNum <- readIORef ior
-
-  iterateLoopT (0, 0, cx, cy, mvs) $ \(step, lms ,cx, cy, (mv:mvs)) -> do
-    when (mv == 'X') $ exitWith 0
-
-    liftIO $ showBoard bd
-    let move dx dy = do
+  liftIO $ showBoard bd
+  let move dx dy = do
           let (nx, ny) = (cx + dx, cy + dy)
           if nx >= 0 && nx < w && ny >= 0 && ny < h
             then do
@@ -60,13 +84,15 @@ simulate bd mvs = do
               then do
               liftIO $ writeCell bd cx cy ' '
               liftIO $ writeCell bd nx ny 'R'
-              when (c == 'O') $ exitWith $ lms * 75 - (step + 1)
+              when (c == 'O') $
+                exitWith $ Win $ lms * 75 - (step + 1)
               return (lms + if c == '\\' then 1 else 0, nx, ny)
               else do
               return (lms, cx, cy)
             else do
             return (lms, cx, cy)
 
+  once $ do
     (lms, nx, ny) <- case mv of
       'L' -> move (-1) 0
       'R' -> move 1    0
@@ -123,14 +149,59 @@ simulate bd mvs = do
     b <- liftIO $ readCell nbd (ny + 1) nx
     when (a /= '*' && b == '*') $ do -- DEATH!!
       liftIO $ putStrLn "You Died"
-      exitWith $ lms * 25 - (step + 1)
+      exitWith $ Dead $ lms * 25 - (step + 1)
 
     when (mv == 'A') $ do
       liftIO $ putStrLn "Aborted"
-      exitWith $ lms * 50 - (step + 1)
+      exitWith $ Abort $ lms * 50 - (step + 1)
 
     liftIO $ GM.move bd nbd
-    return (step + 1, lms, nx, ny, mvs)
+
+    lift $ do
+      llStepL ~= step + 1
+      llLambdasL ~= lms
+      llPosL ~= Pos nx ny
+      return Cont
+
+simulate :: VM.IOVector (UM.IOVector Char)
+            -> String
+            -> IO Result
+simulate bd mvs = do
+  let h = GM.length bd
+  w <- GM.length <$> GM.read bd 0
+  (cx, cy) <- iterateLoopT 0 $ \y -> do
+    iterateLoopT 0 $ \x -> do
+      when (x >= w) exit
+      c <- liftIO $ readCell bd x y
+      when (c == 'R') $ lift $ exitWith (x, y)
+      return $ x+1
+    return $ y+1
+
+  lambdaNum <- do
+    ior <- newIORef 0
+    forM_ [0..h-1] $ \y -> do
+      forM_ [0..w-1] $ \x -> do
+        c <- liftIO $ readCell bd x y
+        when (c == '\\') $ modifyIORef ior (+1)
+    readIORef ior
+
+  let initState = LLState
+        { llStep = 0
+        , llLambdas = 0
+        , llTotalLambdas = lambdaNum
+        , llPos = Pos cx cy
+        , llBoard = bd
+        }
+  (`evalStateT` initState) $ unLLT $ do
+    once $ do
+      foreach mvs $ \mv -> do
+        res <- lift . lift $ simulateStep mv
+        case res of
+          Cont -> do
+            continue
+          _ -> do
+            lift $ exitWith res
+      exitWith Cont
 
 readCell bd x y = do
   row <- GM.read bd y

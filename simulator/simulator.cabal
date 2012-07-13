@@ -21,3 +21,5 @@ executable simulator
                      , vector
                      , mtl
                      , control-monad-loop
+                     , data-lens-fd
+                     , data-lens-template

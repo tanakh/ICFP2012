@@ -16,7 +16,7 @@ cabal-version:       >=1.8
 
 executable ll-simulator
   main-is:             main.hs
-  other-modules:       AI, Ans, LL,  Option, Pos, Provider
+  other-modules:       Ans, LL,  Option, Pos, Provider
   build-depends:       base ==4.5.*
                      , vector
                      , mtl
@@ -30,6 +30,6 @@ executable ll-simulator
                      , bytestring
 
 executable ll-ai-greedy
-  main-is:             ai/Greedy.hs
-  other-modules:       AI, Ans, LL,  Option, Pos, Provider
+  main-is:             AI/Greedy.hs
+  other-modules:       Ans, LL,  Option, Pos, Provider
   build-depends:       base ==4.5.*, vector, mtl, control-monad-loop, data-lens-fd, data-lens-template, optparse-applicative, filepath, pureMD5, stm, bytestring

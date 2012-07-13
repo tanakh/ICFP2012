@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 module Main (main) where
 
 import Control.Applicative
@@ -5,6 +6,7 @@ import Control.Monad
 import Control.Monad.Trans.Loop
 import Control.Monad.Trans
 import Data.Lens
+import Data.List
 import qualified Data.PQueue.Min as Q
 import Data.IORef
 import qualified Data.Vector as V
@@ -25,7 +27,12 @@ import           DefaultMain
 
 main = defaultMain greedySolver
 
-data Value =  Happy Int | Afraid Int | Unknown | Danger deriving (Eq, Ord)
+data Value =  Happy Int | Afraid Int | Unknown | Danger deriving (Eq, Ord, Show)
+data GrandValue = WinGame Int 
+                | Playing Int Value 
+                | AbortGame Int 
+                | StuckGame
+                | DeadGame Int deriving (Eq, Ord, Show)
 
 val2char :: Value -> Char
 val2char Unknown = '?'
@@ -35,7 +42,7 @@ val2char (Happy n)
   | True   = toEnum $ (fromEnum 'a' + n-10)
 val2char (Afraid n)
   | True   = toEnum $ (fromEnum 'A' + n)
-             
+
 valPlus m (Happy n) = Happy $ m+n 
 valPlus m (Afraid n) = Afraid $ m+n 
 valPlus _ x = x
@@ -43,9 +50,34 @@ valPlus _ x = x
 valAfraid (Happy m) = Afraid m
 valAfraid x = x
 
-
-greedySolver :: (MonadIO m) => Solver m
 greedySolver = safetynet $ do
+  _ <- evaluatePlaying True
+  yomi <- sort <$> mapM (\c -> (,c) <$> evaluateHand 3 c) "LRUDA"
+  liftIO $ print yomi
+  let (_, cmd) = head yomi 
+  return $ Ans.Cont cmd
+
+evaluateHand :: (Functor m, MonadIO m) => Int -> Char -> LLT m GrandValue
+evaluateHand depth hand 
+  | depth <= 0 = evaluatePlaying False
+  | otherwise = do
+    withBackup $ do
+      roboPos0 <- access llPosL                
+      result0 <- simulateStep hand
+      roboPos1 <- access llPosL                
+      let result 
+            | roboPos0 == roboPos1 = Dead 0
+            | otherwise            = result0
+      case result of
+        Win n -> return $ WinGame (-n)
+        Abort n -> return $ AbortGame (-n)
+        Dead n -> return $ DeadGame (-n)
+        Skip -> return $ DeadGame 99999999
+        Cont -> 
+          head . sort <$> mapM (evaluateHand (depth-1)) "LRUDA"
+
+evaluatePlaying :: (Functor m, MonadIO m) => Bool -> LLT m GrandValue
+evaluatePlaying debugFlag = do
   bd <- access llBoardL  
   (w,h) <- getSize
   guide <- liftIO $ VM.replicateM h $ VM.replicate w Unknown
@@ -72,12 +104,19 @@ greedySolver = safetynet $ do
         newVals <- readPosList guide nr
         forM_ newVals $ \ newVal -> do
           liftIO $ modifyIORef probes $ Q.insert (valPlus 1 val, nr)
-  withBackup $ do
-    bd <- access llBoardL
-    loopPos $ \r -> do
-      val <- head <$> readPosList guide r
-      writePos bd r (val2char val)
-    showBoard 
-  roboPos <- access llPosL
-  cmd     <- return 'A'
-  return $ Ans.Cont cmd
+  
+  when debugFlag $ do
+    withBackup $ do
+      bd <- access llBoardL
+      loopPos $ \r -> do
+        val <- head <$> readPosList guide r
+        writePos bd r (val2char val)
+      showBoard   
+  
+  remaining <- access llLambdasL        
+  totaling <- access llTotalLambdasL
+  roboPos <- access llPosL          
+  roboVal <- head <$> readPosList guide roboPos
+  if roboVal < Unknown
+    then return $ Playing (totaling-remaining) roboVal        
+    else return $ StuckGame

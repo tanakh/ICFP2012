@@ -202,7 +202,7 @@ undo = do
     (top:_) -> do
       put top
 
-simulateStep :: (Functor m, Monad m, MonadIO m) => Char -> LLT m Result
+simulateStep :: (Functor m, MonadIO m) => Char -> LLT m Result
 simulateStep mv = do
   fld  <- access llFloodL
   step <- access llStepL

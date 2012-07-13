@@ -19,7 +19,9 @@ import qualified Data.Vector.Storable.Mutable as UM
 import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Generic.Mutable as GM
 
-data Pos = Pos { px :: Int, py :: Int }
+import Pos
+
+type Board = VM.IOVector (UM.IOVector Char)
 
 data LLState
   = LLState
@@ -27,7 +29,7 @@ data LLState
     , llLambdas :: Int
     , llTotalLambdas :: Int
     , llPos :: Pos
-    , llBoard :: VM.IOVector (UM.IOVector Char)
+    , llBoard :: Board
     }
 nameMakeLens ''LLState $ \name -> Just (name ++ "L")
 

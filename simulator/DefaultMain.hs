@@ -40,4 +40,3 @@ defaultMain theSolver = do
       return $ theSolver
 
   print =<< simulate opt fld bd solver
-

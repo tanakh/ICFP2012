@@ -184,7 +184,6 @@ evaluatePlaying debugFlag = do
     if (val < Unknown)
        then liftIO $ modifyIORef yesLambdaR  (1+)
        else liftIO $ modifyIORef noLambdaR   (1+)
-  
   yesLambda <- liftIO $ readIORef yesLambdaR
   noLambda <- liftIO $ readIORef noLambdaR
   let liftYes :: Bool 

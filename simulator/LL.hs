@@ -49,6 +49,37 @@ scoreResult (Abort n) = n
 scoreResult (Dead n) = n
 scoreResult _ = assert False undefined
 
+runLLT :: MonadIO m => [String] -> LLT m a -> m a
+runLLT bdl m = do
+  let h = length bdl
+      w = length $ head bdl
+  bd <- liftIO $ V.thaw . V.fromList =<< mapM (U.thaw . U.fromList) bdl
+
+  (cx, cy) <- iterateLoopT 0 $ \y -> do
+    iterateLoopT 0 $ \x -> do
+      when (x >= w) exit
+      c <- liftIO $ readCell bd x y
+      when (c == 'R') $ lift $ exitWith (x, y)
+      return $ x+1
+    return $ y+1
+
+  lambdaNum <- liftIO $ do
+    ior <- newIORef 0
+    forM_ [0..h-1] $ \y -> do
+      forM_ [0..w-1] $ \x -> do
+        c <- readCell bd x y
+        when (c == '\\') $ modifyIORef ior (+1)
+    readIORef ior
+
+  let initState = LLState
+        { llStep = 0
+        , llLambdas = 0
+        , llTotalLambdas = lambdaNum
+        , llPos = Pos cx cy
+        , llBoard = bd
+        }
+  evalStateT (unLLT m) initState
+
 simulateStep :: (Functor m, Monad m, MonadIO m) => Char -> LLT m Result
 simulateStep mv = do
   step <- access llStepL
@@ -149,45 +180,15 @@ simulateStep mv = do
       llPosL ~= Pos nx ny
       return Cont
 
-simulate :: VM.IOVector (UM.IOVector Char)
-            -> String
-            -> IO Result
+simulate :: [String] -> String -> IO Result
 simulate bd mvs = do
-  let h = GM.length bd
-  w <- GM.length <$> GM.read bd 0
-  (cx, cy) <- iterateLoopT 0 $ \y -> do
-    iterateLoopT 0 $ \x -> do
-      when (x >= w) exit
-      c <- liftIO $ readCell bd x y
-      when (c == 'R') $ lift $ exitWith (x, y)
-      return $ x+1
-    return $ y+1
-
-  lambdaNum <- do
-    ior <- newIORef 0
-    forM_ [0..h-1] $ \y -> do
-      forM_ [0..w-1] $ \x -> do
-        c <- liftIO $ readCell bd x y
-        when (c == '\\') $ modifyIORef ior (+1)
-    readIORef ior
-
-  let initState = LLState
-        { llStep = 0
-        , llLambdas = 0
-        , llTotalLambdas = lambdaNum
-        , llPos = Pos cx cy
-        , llBoard = bd
-        }
-  (`evalStateT` initState) $ unLLT $ do
-    once $ do
-      foreach mvs $ \mv -> do
-        res <- lift . lift $ simulateStep mv
-        case res of
-          Cont -> do
-            continue
-          _ -> do
-            lift $ exitWith res
-      exitWith Cont
+  runLLT bd $ once $ do
+    foreach mvs $ \mv -> do
+      res <- lift . lift $ simulateStep mv
+      case res of
+        Cont -> continue
+        _ -> lift $ exitWith res
+    exitWith Cont
 
 readCell bd x y = do
   row <- GM.read bd y

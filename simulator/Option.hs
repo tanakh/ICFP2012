@@ -19,9 +19,11 @@ parseIO = execParser $ info (helper <*> parse)
    ( fullDesc
    & header "*** Lambda Lifting Simulator ***"
    & progDesc 
-   (unlines ["",
-             "write the Mining Robot AI, dig for lambda and save the world!",
-             "interactive mode : [h][j][k][l] for move, [.] for wait, [q] for abort."]))
+   (unlines ["auto mode :",
+             "  write the Mining Robot AI, dig for lambda and save the world!",
+             "interactive mode :",
+             "  [h][j][k][l] or [cursor keys] for move,",
+             "  [.] or [space] for wait, [backspace] for undo, [q] for abort."]))
 
 parse :: Parser Option
 parse = Option 

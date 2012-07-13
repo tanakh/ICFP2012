@@ -41,15 +41,31 @@ autoProvider mv = putMVar mv Ans.End
 
 kbdProvider :: MVar Ans.Ans -> IO ()  
 kbdProvider mv = forever $ do
-  c <- getChar
-  let cmd = case c of
-        'h' -> "L"
-        'j' -> "D"
-        'k' -> "U"
-        'l' -> "R"
-        '.' -> "W"
-        'q' -> "A"
-        _   -> []
-  forM_ cmd $ \c ->
-    putMVar mv (Ans.Cont c)
+  str <- getCharWithEsc
+  forM_ (parse str (map fromEnum str)) $ \ans ->
+    putMVar mv ans
+  where
+    parse str codes
+      | str == "h"           = [Ans.Cont 'L']
+      | str == "j"           = [Ans.Cont 'D']
+      | str == "k"           = [Ans.Cont 'U']
+      | str == "l"           = [Ans.Cont 'R']
+      | str == "."           = [Ans.Cont 'W']
+      | str == " "           = [Ans.Cont 'W']
+      | str == "q"           = [Ans.Cont 'A']
+      | codes == [8]         = [Ans.Undo]
+      | codes == [27,91,65]  = [Ans.Cont 'U']
+      | codes == [27,91,66]  = [Ans.Cont 'D']
+      | codes == [27,91,67]  = [Ans.Cont 'R']
+      | codes == [27,91,68]  = [Ans.Cont 'L']
+      | otherwise            = []
+    getCharWithEsc = do
+      a <- getChar
+      if a /= toEnum 27
+        then return [a]
+        else do
+          b <- getChar
+          c <- getChar
+          return [a,b,c]
+      
 

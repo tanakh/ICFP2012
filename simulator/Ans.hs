@@ -1,3 +1,3 @@
 module Ans where
 
-data Ans = Cont Char | End
+data Ans = Cont Char | Undo | End

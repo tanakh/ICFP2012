@@ -200,12 +200,12 @@ simulateStep mv = do
 
     a <- liftIO $ readCell bd (ny + 1) nx
     b <- liftIO $ readCell nbd (ny + 1) nx
-    when (a /= '*' && b == '*') $ do -- DEATH!!
-      liftIO $ putStrLn "You Died"
+    when (a /= '*' && b == '*') $ do -- destroy!!
+      liftIO $ putStrLn "You Are Destroyed"
       exitWith $ Dead $ lms * 25 - (step + 1)
 
     when (mv == 'A') $ do
-      liftIO $ putStrLn "Aborted"
+      liftIO $ putStrLn "Harakiri!"
       exitWith $ Abort $ lms * 50 - (step + 1)
 
     liftIO $ GM.move bd nbd

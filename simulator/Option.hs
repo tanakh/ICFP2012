@@ -10,15 +10,18 @@ data Option =
     verbose :: Bool
   }
   
-data Input  = InputFile FilePath | Stdin
-data Answer = AnswerFile FilePath | Keyboard | Auto
+data Input  = InputFile FilePath | Stdin deriving (Eq, Show)
+data Answer = AnswerFile FilePath | Keyboard | Auto deriving (Eq, Show)
 
 
 parseIO :: IO Option
 parseIO = execParser $ info (helper <*> parse)
    ( fullDesc
-   & progDesc "Lambda Lifting Simulator"
-   & header "ll-simulator")
+   & header "*** Lambda Lifting Simulator ***"
+   & progDesc 
+   (unlines ["",
+             "write the Mining Robot AI, dig for lambda and save the world!",
+             "interactive mode : [h][j][k][l] for move, [.] for wait, [q] for abort."]))
 
 parse :: Parser Option
 parse = Option 

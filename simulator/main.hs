@@ -34,7 +34,7 @@ main = do
 
 blackhole :: MVar a -> IO ()
 blackhole mv = forever $ do
-  _ <- readMVar mv
+  _ <- takeMVar mv
   return ()
 
 fileProvider :: FilePath -> Provider
@@ -47,6 +47,7 @@ fileProvider fn mvAns mvState = do
 autoProvider :: Provider
 autoProvider mvAns mvState = do
   forkIO $ blackhole mvState
+  replicateM_ 100 $ putMVar mvAns $ Ans.Cont 'D'
   putMVar mvAns Ans.End
 
 kbdProvider :: Provider

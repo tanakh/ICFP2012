@@ -268,3 +268,12 @@ readCell bd x y = do
 writeCell bd x y v = do
   row <- GM.read bd y
   GM.write row x v
+
+
+readCellP bd (Pos x y) = do
+  row <- GM.read bd y
+  GM.read row x
+
+writeCellP bd (Pos x y) v = do
+  row <- GM.read bd y
+  GM.write row x v

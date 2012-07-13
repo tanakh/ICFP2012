@@ -14,9 +14,9 @@ category:            Game
 build-type:          Simple
 cabal-version:       >=1.8
 
-executable simulator
+executable ll-simulator
   main-is:             main.hs
-  -- other-modules:       
+  other-modules:       LL
   build-depends:       base ==4.5.*
                      , vector
                      , mtl

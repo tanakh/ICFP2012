@@ -22,8 +22,9 @@ main = do
       bdl = map (take w . (++ repeat ' ')) bd0
   bd <- V.thaw . V.fromList =<< mapM (U.thaw . U.fromList) bdl
   mvs <- filter (`elem` "LRUDWA") <$> readFile ansfile
-  simulate bd $ mvs ++ "X"
+  score <- simulate bd $ mvs ++ "X"
   showBoard bd
+  print score
 
 simulate :: VM.IOVector (UM.IOVector Char)
             -> String
@@ -59,6 +60,7 @@ simulate bd mvs = do
               then do
               liftIO $ writeCell bd cx cy ' '
               liftIO $ writeCell bd nx ny 'R'
+              when (c == 'O') $ exitWith $ lms * 75 - (step + 1)
               return (lms + if c == '\\' then 1 else 0, nx, ny)
               else do
               return (lms, cx, cy)
@@ -70,10 +72,8 @@ simulate bd mvs = do
       'R' -> move 1    0
       'U' -> move 0    1
       'D' -> move 0    (-1)
-      'W' -> return (lms, cy, cy)
-      'A' -> do
-        liftIO $ putStrLn "Aborted"
-        exitWith $ lms * 50 - step
+      'W' -> return (lms, cx, cy)
+      'A' -> return (lms, cx, cy)
 
     liftIO $ print (lms, lambdaNum, nx, ny)
 
@@ -118,6 +118,16 @@ simulate bd mvs = do
               liftIO $ writeCell nbd (x + 1) (y - 1) '*'
               liftIO $ writeCell nbd x y ' '
               continue
+
+    a <- liftIO $ readCell bd (ny + 1) nx
+    b <- liftIO $ readCell nbd (ny + 1) nx
+    when (a /= '*' && b == '*') $ do -- DEATH!!
+      liftIO $ putStrLn "You Died"
+      exitWith $ lms * 25 - (step + 1)
+
+    when (mv == 'A') $ do
+      liftIO $ putStrLn "Aborted"
+      exitWith $ lms * 50 - (step + 1)
 
     liftIO $ GM.move bd nbd
     return (step + 1, lms, nx, ny, mvs)

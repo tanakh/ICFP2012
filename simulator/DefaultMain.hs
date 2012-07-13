@@ -1,17 +1,12 @@
 module DefaultMain(defaultMain) where
 
-import Control.Applicative
-import Control.Monad
 import Control.Concurrent
-import System.Environment
 import System.IO
 
-import qualified Ans as Ans
 import           LL
 import qualified Option as Opt
 import           Provider
 import qualified Flood
-
 
 defaultMain :: Solver IO -> IO ()
 defaultMain theSolver = do

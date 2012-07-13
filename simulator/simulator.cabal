@@ -52,3 +52,8 @@ executable ll-ai-greedy2
   main-is:             ../AI/Greedy2.hs
   build-depends:       base ==4.5.*, pqueue, simulator, vector, data-lens-fd, mtl, control-monad-loop, stm
 
+executable ll-ai-bf
+  hs-source-dirs:      dist
+  main-is:             ../AI/BF.hs
+  build-depends:       base ==4.5.*, simulator
+                     , vector, data-lens-fd, mtl, control-monad-loop, stm

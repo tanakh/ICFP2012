@@ -3,6 +3,7 @@ import Control.Exception
 import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Trans.Loop
+import Data.IORef
 import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as VM
 import qualified Data.Vector.Storable as U
@@ -33,11 +34,17 @@ simulate bd mvs = do
   (cx, cy) <- iterateLoopT 0 $ \y -> do
     iterateLoopT 0 $ \x -> do
       when (x >= w) exit
-      row <- lift . lift $ GM.read bd y
-      c   <- lift . lift $ GM.read row x
+      c <- liftIO $ readCell bd x y
       when (c == 'R') $ lift $ exitWith (x, y)
       return $ x+1
     return $ y+1
+
+  ior <- newIORef 0
+  forM_ [0..h-1] $ \y -> do
+    forM_ [0..w-1] $ \x -> do
+      c <- liftIO $ readCell bd x y
+      when (c == '\\') $ modifyIORef ior (+1)
+  lambdaNum <- readIORef ior
 
   iterateLoopT (0, 0, cx, cy, mvs) $ \(step, lms ,cx, cy, (mv:mvs)) -> do
     when (mv == 'X') $ exitWith 0
@@ -68,12 +75,20 @@ simulate bd mvs = do
         liftIO $ putStrLn "Aborted"
         exitWith $ lms * 50 - step
 
+    liftIO $ print (lms, lambdaNum, nx, ny)
+
     -- upadte
     nbd <- liftIO $ VM.replicateM h $ UM.replicate w ' '
     foreach [0..h-1] $ \y -> do
       foreach [0..w-1] $ \x -> do
         liftIO $ writeCell nbd x y =<< readCell bd x y
         c <- liftIO $ readCell bd x y
+
+        when (c == 'L') $ do
+          when (lms == lambdaNum) $ do
+            liftIO $ writeCell nbd x y 'O'
+          continue
+
         when (c /= '*') continue
         when (y > 0) $ do
           b <- liftIO $ readCell bd x (y - 1)
@@ -103,6 +118,8 @@ simulate bd mvs = do
               liftIO $ writeCell nbd (x + 1) (y - 1) '*'
               liftIO $ writeCell nbd x y ' '
               continue
+
+    liftIO $ GM.move bd nbd
     return (step + 1, lms, nx, ny, mvs)
 
 readCell bd x y = do
@@ -116,7 +133,7 @@ writeCell bd x y v = do
 showBoard bd = do
   let h = GM.length bd
   w <- GM.length <$> GM.read bd 0
-  forM_ [0..h-1] $ \y -> do
+  forM_ [h-1, h-2 .. 0] $ \y -> do
     forM_ [0..w-1] $ \x -> do
       putChar =<< readCell bd x y
     putStrLn ""

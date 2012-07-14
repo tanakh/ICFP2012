@@ -203,7 +203,7 @@ collector opt submitQ bestTejun = forever $do
 waitOhagi opt startTime bestTejun = do
   t <- getCurrentTime
   case () of 
-    _ | t > startTime + Option.timeout opt -> do
+    _ | t > startTime + Option.timeout opt -2 -> do
           Tejun _ _ str <- atomically $ readTVar bestTejun
           putStrLn str
       | otherwise -> do

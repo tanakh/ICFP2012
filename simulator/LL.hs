@@ -216,7 +216,7 @@ simulateStep mv = do
   once $ do
     case cont of
       Cont -> return ()
-      Skip -> continueWith cont
+      Skip -> continueWith Cont
       _ -> exitWith cont
 
     -- upadte

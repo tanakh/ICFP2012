@@ -273,11 +273,18 @@ simulateStep mv = do
       llPosL ~= Pos nx ny
       return Cont
 
-readCell bd x y = do
+whenInBound bd x y def action = do
+  let h = GM.length bd
+  w <- GM.length <$> GM.read bd 0
+  if x >= 0 && x < w && y >= 0 && y < h
+    then action
+    else def
+
+readCell bd x y = whenInBound bd x y (return '#') $ do
   row <- GM.read bd y
   GM.read row x
 
-writeCell bd x y v = do
+writeCell bd x y v = whenInBound bd x y (return ()) $ do
   row <- GM.read bd y
   GM.write row x v
 

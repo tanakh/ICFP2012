@@ -126,12 +126,16 @@ showBoard = do
         putChar =<< readCell bd x y
       putStrLn ""
 
-simulate :: Opt.Option -> [String] -> MVar Ans.Ans -> IO Result
-simulate opt bd mVarAns = do
+simulate :: Opt.Option -> [String] -> MVar Ans.Ans -> MVar LLState -> IO Result
+simulate opt bd mVarAns mVarState = do
   runLLT bd $ do
     res <- once $ do
       repeatLoopT $ do
+        -- pass the current status to the provider (and to player)
+        st <- lift . lift $ get
+        liftIO $ putMVar mVarState st
         when (Opt.verbose opt) $ ll showStatus
+        -- receive answer
         ans <- liftIO $ takeMVar mVarAns
         res <- case ans of
           Ans.End -> ll $ simulateStep 'A'
@@ -176,20 +180,33 @@ simulateStep mv = do
   llHistL %= (stat:)
 
   let move dx dy = do
-          let (nx, ny) = (cx + dx, cy + dy)
-          if nx >= 0 && nx < w && ny >= 0 && ny < h
-            then do
+        let (nx, ny) = (cx + dx, cy + dy)
+        if nx >= 0 && nx < w && ny >= 0 && ny < h
+          then do
             c <- liftIO $ readCell bd nx ny
             if c `elem` " .O\\"
               then do
-              liftIO $ writeCell bd cx cy ' '
-              liftIO $ writeCell bd nx ny 'R'
-              when (c == 'O') $
-                exitWith $ Win $ lms * 75 - step
-              return (lms + if c == '\\' then 1 else 0, nx, ny)
+                liftIO $ writeCell bd cx cy ' '
+                liftIO $ writeCell bd nx ny 'R'
+                when (c == 'O') $
+                  exitWith $ Win $ lms * 75 - step
+                return (lms + if c == '\\' then 1 else 0, nx, ny)
               else do
-              return (lms, cx, cy)
-            else do
+                let (n2x,n2y) = (nx + dx, ny + dy)
+                if dy == 0 && c == '*' && n2x >= 0 && n2x < w
+                  then do
+                    c2 <- liftIO $ readCell bd n2x n2y
+                    if c2 == ' '
+                      then do
+                        liftIO $ writeCell bd cx cy ' '
+                        liftIO $ writeCell bd nx ny 'R'
+                        liftIO $ writeCell bd n2x n2y '*'
+                        return (lms, nx, ny)
+                      else
+                        return (lms, cx, cy)
+                  else
+                    return (lms, cx, cy)
+          else do
             return (lms, cx, cy)
 
   once $ do

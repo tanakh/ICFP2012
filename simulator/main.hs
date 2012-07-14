@@ -8,6 +8,8 @@ import qualified Option as Opt
 import LL
 import qualified Ans as Ans
 
+type Provider = MVar Ans.Ans -> MVar LLState -> IO ()
+
 main :: IO ()
 main = do
   opt <- Opt.parseIO
@@ -18,31 +20,41 @@ main = do
       w = maximum $ map length bd0
       bd = map (take w . (++ repeat ' ')) bd0
   ansMVar <- newEmptyMVar
+  stateMVar <- newEmptyMVar
   provider <- case Opt.answer opt of
-    Opt.AnswerFile ansfn -> return $ fileProvider ansfn ansMVar
-    Opt.Auto -> return $ autoProvider ansMVar
+    Opt.AnswerFile ansfn -> return $ fileProvider ansfn ansMVar stateMVar
+    Opt.Auto -> return $ autoProvider ansMVar stateMVar
     Opt.Keyboard -> do
       hSetBuffering stdout NoBuffering
       hSetBuffering stdin NoBuffering
       hSetEcho stdin False
-      return $ kbdProvider ansMVar
+      return $ kbdProvider ansMVar stateMVar
   forkIO $ provider
-  print =<< simulate opt bd ansMVar
+  print =<< simulate opt bd ansMVar stateMVar
 
-fileProvider :: FilePath -> MVar Ans.Ans ->  IO ()
-fileProvider fn mvar = do
+blackhole :: MVar a -> IO ()
+blackhole mv = forever $ do
+  _ <- readMVar mv
+  return ()
+
+fileProvider :: FilePath -> Provider
+fileProvider fn mvAns mvState = do
+  forkIO $ blackhole mvState
   mvs <- filter (`elem` "LRUDWA") <$> readFile fn
-  mapM_ (putMVar mvar) $ map Ans.Cont mvs
-  putMVar mvar Ans.End
+  mapM_ (putMVar mvAns) $ map Ans.Cont mvs
+  putMVar mvAns Ans.End
 
-autoProvider :: MVar Ans.Ans -> IO ()
-autoProvider mv = putMVar mv Ans.End
+autoProvider :: Provider
+autoProvider mvAns mvState = do
+  forkIO $ blackhole mvState
+  putMVar mvAns Ans.End
 
-kbdProvider :: MVar Ans.Ans -> IO ()
-kbdProvider mv = forever $ do
+kbdProvider :: Provider
+kbdProvider mvAns mvState = forever $ do
+  forkIO $ blackhole mvState
   str <- getCharWithEsc
   forM_ (parse str (map fromEnum str)) $ \ans ->
-    putMVar mv ans
+    putMVar mvAns ans
   where
     parse str codes
       | str == "h"           = [Ans.Cont 'L']

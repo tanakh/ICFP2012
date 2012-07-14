@@ -40,7 +40,6 @@ import           Pos
 
 
 
-data Tejun = Tejun Int Result String deriving (Eq,Ord,Show,Read)
 
 data Resource = 
   Resource {

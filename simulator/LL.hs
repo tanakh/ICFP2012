@@ -232,37 +232,36 @@ simulateStep mv = do
 
     -- update
     nbd <- liftIO $ VM.replicateM h $ UM.replicate w ' '
-    forM_ [0..h-1] $ \y -> do
-      forM_ [0..w-1] $ \x -> do
-        writeCell nbd x y =<< readCell bd x y
+    lift $ forPos $ \p -> do
+      writePos nbd p =<< readPos bd p
 
-        c  <- readCell bd x       y
-        b  <- readCell bd x       (y - 1)
-        c1 <- readCell bd (x + 1) y
-        b1 <- readCell bd (x + 1) (y - 1)
-        c0 <- readCell bd (x - 1) y
-        b0 <- readCell bd (x - 1) (y - 1)
+      c  <- readPos bd $ p + Pos 0 0
+      b  <- readPos bd $ p + Pos 0 (-1)
+      c1 <- readPos bd $ p + Pos 1 0
+      b1 <- readPos bd $ p + Pos 1 (-1)
+      c0 <- readPos bd $ p + Pos (-1) 0
+      b0 <- readPos bd $ p + Pos (-1) (-1)
 
-        case () of
-          _ | c == 'L' && lms == lambdaNum -> do
-                writeCell nbd x y 'O'
-            | c == '*' &&
-              b == ' ' -> do
-                writeCell nbd x (y - 1) '*'
-                writeCell nbd x y ' '
-            | c == '*' && c1 == ' ' &&
-              b == '*' && b1 == ' ' -> do
-                writeCell nbd x y ' '
-                writeCell nbd (x + 1) (y - 1) '*'
-            | c0 == ' ' && c == '*' &&
-              b0 == ' ' && b == '*' -> do
-                writeCell nbd x y ' '
-                writeCell nbd (x - 1) (y - 1) '*'
-            | c == '*'  && c1 == ' ' &&
-              b == '\\' && b1 == ' ' -> do
-                writeCell nbd x y ' '
-                writeCell nbd (x + 1) (y - 1) '*'
-          _ -> return ()
+      case () of
+        _ | c == 'L' && lms == lambdaNum -> do
+              writePos nbd p 'O'
+          | c == '*' &&
+            b == ' ' -> do
+              writePos nbd p ' '
+              writePos nbd (p + Pos 0 (-1)) '*'
+          | c == '*' && c1 == ' ' &&
+            b == '*' && b1 == ' ' -> do
+              writePos nbd p ' '
+              writePos nbd (p + Pos 1 (-1)) '*'
+          | c0 == ' ' && c == '*' &&
+            b0 == ' ' && b == '*' -> do
+              writePos nbd p ' '
+              writePos nbd (p + Pos (-1) (-1)) '*'
+          | c == '*'  && c1 == ' ' &&
+            b == '\\' && b1 == ' ' -> do
+              writePos nbd p ' '
+              writePos nbd (p + Pos 1 (-1)) '*'
+        _ -> return ()
 
     lift $ llBoardL ~= nbd
 

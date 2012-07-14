@@ -120,7 +120,7 @@ wideShow width val
     cut x = x
 
 dijkstra :: (MonadIO m, Functor m, Terrain a, U.Unbox a) =>
-            Field a -> String -> String -> a -> LLT m (Field a)
+            Field a -> String -> String -> a -> LLT m ()
 dijkstra field sourceStr passableStr initVal = do
   bd <- access llBoardL
   probes <- liftIO $ newIORef $ Q.empty
@@ -143,7 +143,7 @@ dijkstra field sourceStr passableStr initVal = do
         newVals <- readFList field nr
         forM_ newVals $ \ _ -> do
           liftIO $ modifyIORef probes $ Q.insert (terrainSucc val, nr)
-  return field
+  return ()
     where
       normalize c
         | c `elem` "123456789" = '1'

@@ -79,7 +79,8 @@ data Config =
     searchAtom :: 
        [(Wave, -- weight
          String, -- source terrains
-         String  -- passable terrains
+         String,  -- passable terrains
+         Double -- power law index
         )],
     windAtom ::
        [(Wave, -- weight
@@ -99,9 +100,9 @@ choose xs = do
   return $ xs !! i
 
 normalSearchAtom = 
-    (Wave [(2.302, 0, 0)], "\\O", " .")
+    (Wave [(2.302, 0, 0)], "\\O", " .", -1)
 
-randomSearchAtom :: Recipe -> IO [(Wave, String, String)]
+randomSearchAtom :: Recipe -> IO [(Wave, String, String, Double)]
 randomSearchAtom r = 
   (normalSearchAtom :) <$> randomMany (searchAtomNum r) (randomSearchAtom1 r)
 
@@ -112,7 +113,8 @@ randomSearchAtom1 r = do
   w <- randomWeight r
   src <- choose $ powerset1 $ possiblySource r
   pass <- choose $ powerset1 $ possiblyPass r
-  return (w, src, pass)
+  pow <- randomRIO (-1, -1)
+  return (w, src, pass, pow)
 
 randomWindAtom1 r = do
   w <- randomWeight r

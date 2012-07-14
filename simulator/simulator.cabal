@@ -93,21 +93,12 @@ executable ll-ai-bf
 
 
 
-executable ll-ai-ninja
+executable ll-ai-tuja
   ghc-options:         -O3
   hs-source-dirs:      dist
-  main-is:             ../AI/Ninja.hs
+  main-is:             ../AI/Tuja.hs
   build-depends:       base ==4.5.*, simulator, mtl
                        , pqueue,vector, data-lens-fd, mtl, control-monad-loop
                        , stm, containers, unix, random,filepath, bytestring,pureMD5
                        , process
 
-executable ll-ai-sarariman
-  ghc-options:         -O3
-  hs-source-dirs:      dist
-  main-is:             ../AI/Sarariman.hs
-  build-depends:       base ==4.5.*, simulator, mtl
-                       , pqueue,vector, data-lens-fd, mtl, control-monad-loop
-                       , stm, containers, unix, random,filepath, bytestring,pureMD5
-                       , process
-                       

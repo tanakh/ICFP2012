@@ -195,7 +195,6 @@ simulateStep :: (Functor m, Monad m, MonadIO m) => Char -> LLT m Result
 simulateStep mv = do
   step <- access llStepL
   bd <- access llBoardL
-  lms <- access llLambdasL
   lambdaNum <- access llTotalLambdasL
   (w, h) <- getSize
 
@@ -210,6 +209,7 @@ simulateStep mv = do
     'D' -> move 0    (-1)
     'W' -> return Cont
     'A' -> return Cont -- abort process is below
+  lms <- access llLambdasL
 
   once $ do
     case cont of
@@ -253,12 +253,14 @@ simulateStep mv = do
     lift $ llBoardL ~= nbd
 
     when (mv == 'A') $ do
+      lms <- lift $ access llLambdasL
       exitWith $ Abort $ lms * 50 - step
 
     Pos nx ny <- lift $ access llPosL
     a <- readCell bd  nx (ny + 1)
     b <- readCell nbd nx (ny + 1)
     when (a /= '*' && b == '*') $ do -- DEATH!!
+      lms <- lift $ access llLambdasL
       exitWith $ Dead $ lms * 25 - step
 
     lift $ llStepL += 1

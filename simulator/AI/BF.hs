@@ -53,6 +53,8 @@ addCacheEntry hmr st = do
 main :: IO ()
 main = defaultMain $ do
   valueField <- newF (0::Int)
+  dijkstra valueField "\\O" " .*W!R" 0
+  updateF valueField (75-)
   hmr <- liftIO $ newIORef HM.empty
   (mov, sc) <- withBackup $ search valueField hmr  10
   liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++ [mov]

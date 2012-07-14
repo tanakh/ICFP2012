@@ -85,7 +85,7 @@ runLLT bdl m = do
     readIORef ior
 
   let initState = LLState
-        { llStep = 0
+        { llStep = 1
         , llLambdas = 0
         , llTotalLambdas = lambdaNum
         , llPos = Pos cx cy
@@ -160,10 +160,12 @@ simulate opt bd mVarAns mVarState = do
       showStatus
 
     rep <- access llReplayL
+    when (Opt.verbose opt) $ do
+      liftIO $ putStrLn $ reverse rep
+
     case Opt.replay opt of
       Opt.ReplayNothing -> do
-        when (Opt.verbose opt) $ do
-          liftIO $ putStrLn $ reverse rep
+        return ()
       Opt.ReplayDefault -> do
         let fn = case Opt.input opt of
               Opt.InputFile fp -> fp

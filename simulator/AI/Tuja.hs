@@ -26,8 +26,6 @@ import           DefaultMain
 import           LL
 import           Pos
 
-type Field a = VM.IOVector (VM.IOVector a) 
-
 newtype Wave = 
   Wave  
   [(Double, -- amplitude
@@ -59,20 +57,21 @@ data Config =
   }
 
 main :: IO ()
-main = 
-  defaultMain $ simpleSolver $ 
-  Config {
-    searchAtom =
-      [(Wave [], "\\O", " .")],
-    windAtom = 
-      [(Wave [(5, 0.05, 0),(5,0,3)], Wave [(1, 0.1, 0)])]
-         }
+main = do
+  smellRef <- newIORef Nothing
+  defaultMain $ simpleSolver smellRef $ 
+    Config {
+      searchAtom =
+        [(Wave [], "\\O", " .")],
+      windAtom = 
+        [(Wave [(5, 0.05, 0),(5,0,3)], Wave [(1, 0.1, 0)])]
+           }
 
 isEffectiveMove :: (MonadIO m) => Char -> LLT m Bool
 isEffectiveMove hand = return True
 
-simpleSolver :: Config -> Solver IO
-simpleSolver config = safetynet $ do
+simpleSolver :: IORef (Maybe (Field Double)) -> Config -> Solver IO
+simpleSolver smellRef config = safetynet $ do
   -- setup initial valmap, dijkstra field
   bd <- access llBoardL
   validHands <- filterM isEffectiveMove "LRUD"  
@@ -81,14 +80,21 @@ simpleSolver config = safetynet $ do
                 Map.fromList [(hand,0::Double) | hand <- validHands]
   let addHyoka hand val =
         liftIO $ modifyIORef hyokaRef (Map.update (Just . (val+)) hand)
-  smell <- newF (1::Double)
   roboPos <- access llPosL
+  
+  maybeSmell <- liftIO $ readIORef smellRef
+  smell <- case maybeSmell of
+    Just a -> return a
+    Nothing -> do
+      b <- newF (1::Double)
+      liftIO $ writeIORef smellRef $ Just b
+      return b
 
   step <- access llStepL
   let time :: Double
       time = fromIntegral step
-      
-  
+
+
   -- treat each wind
   forM_ (windAtom config) $ \ (wave, windWave) -> do
     forM_ validHands $ \hand -> do      

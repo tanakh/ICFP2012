@@ -8,7 +8,6 @@ import           LL
 import qualified Option as Opt
 import           Provider
 import qualified Flood
-import Communicate(Result)
 
 defaultMain s = defaultMainRes s >> return ()
 
@@ -41,3 +40,4 @@ defaultMainRes theSolver = do
   res <- simulate opt fld bd solver
   when (Opt.verbose opt) $ print res
   return res
+  

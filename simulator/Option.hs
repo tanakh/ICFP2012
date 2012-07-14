@@ -3,22 +3,17 @@ module Option where
 import Options.Applicative
 import Options.Applicative.Builder
 
-import Communicate
-
 data Option =
   Option {
     input :: Input,
     answer :: Answer,
     replay :: Replay,
-    verbose :: Bool,
-    mode :: Mode,
-    commChan :: Maybe Channel
+    verbose :: Bool
   }
 
 data Input  = InputFile FilePath | Stdin deriving (Eq, Show)
 data Answer = AnswerFile FilePath | Keyboard | Auto deriving (Eq, Show)
 data Replay = ReplayFile FilePath | ReplayDefault | ReplayNothing deriving (Eq, Show)
-data Mode = Ninja | Survey deriving (Eq, Show)
 
 parseIO :: IO Option
 parseIO = execParser $ info (helper <*> parse)
@@ -55,13 +50,6 @@ parse = Option
           long "verbose"
           & short 'v'
           & help "be verbose")
-        <*> switch (
-          long "survey"
-          & short 's'
-          & transform fm
-          & help "Tuja mode 'survey'; (default) ninja")
-        <*> pure Nothing
-        
   where
     fa str = case str of
       "kbd"  -> Keyboard
@@ -69,6 +57,3 @@ parse = Option
     fr str = case str of
       "none" -> ReplayNothing
       _      -> ReplayFile str
-    fm False  = Ninja
-    fm True  = Survey
-    

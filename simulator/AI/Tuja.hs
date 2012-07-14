@@ -148,21 +148,23 @@ main = do
       res <- initResource
       config <- randomConfig  
 
-      res <- runLLT fld bd $ simpleSolver res config
+      (Tejun sco res rep) <- runLLT fld bd $ simpleSolver res config
       let fnInput = case Option.input opt of
             Option.InputFile fp -> fp
             Option.Stdin -> "STDIN"  
-          fnRec = (printf "record/%s-%d-%s.txt"
+          fnRec = (printf "record/%s-%d-%s-%s.txt"
                 (dropExtension $ takeFileName fnInput)
-                (scoreResult res)
+                (sco)
+                (take 6 $ show $ md5 $ L.pack rep)
                 (take 6 $ show $ md5 $ L.pack $ show config)) 
       hPutStrLn stderr fnRec
       liftIO $ system "mkdir -p record/"
       liftIO $ writeFile fnRec $
         unlines $
-          [show $ scoreResult res,
+          [show $ sco,
            show $ res,
-           show $ config
+           show $ config,
+           rep
           ]
 
 ninjaMain :: Option.Option -> Int -> Flood.Flood -> [String] -> IO ()
@@ -188,7 +190,7 @@ isEffectiveMove hand = return True
 simpleSolver :: (Functor m, MonadIO m) 
                 => Resource
                 -> Config 
-                -> LLT m Result
+                -> LLT m Tejun
 simpleSolver resource config = do
   bd <- access llBoardL
   validHands <- filterM isEffectiveMove "LRUD"  
@@ -244,11 +246,12 @@ simpleSolver resource config = do
     sco <- abortScore
     rep <- getReplay
     liftIO $ submitter resource $ Tejun sco Abort rep
-  maybeS <- 
-  case res of
-    Cont -> simpleSolver resource config
-    _        -> do
-      rep <- reverse <$> access llReplayL
-      score 
-      liftIO $ submitter resource $ Tejun sco res rep
-      return res
+  maybeS <- score
+  case maybeS of
+    Nothing -> simpleSolver resource config
+    Just sco  -> do
+      res <- access llResultL
+      rep <- getReplay
+      let tejun = Tejun sco res rep
+      liftIO $ submitter resource $ tejun
+      return tejun

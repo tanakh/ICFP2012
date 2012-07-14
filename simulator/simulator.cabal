@@ -14,9 +14,15 @@ category:            Game
 build-type:          Simple
 cabal-version:       >=1.8
 
-executable ll-simulator
-  main-is:             main.hs
-  other-modules:       Ans, LL,  Option, Pos, Provider
+library
+  exposed-modules:     Ans
+                       AI.Common
+                       DefaultMain
+                       Flood
+                       LL
+                       Option
+                       Pos
+                       Provider
   build-depends:       base ==4.5.*
                      , vector
                      , mtl
@@ -29,12 +35,19 @@ executable ll-simulator
                      , stm >= 2.4
                      , bytestring
 
-executable ll-ai-greedy
-  main-is:             AI/Greedy.hs
-  other-modules:       Ans, LL,  Option, Pos, Provider
-  build-depends:       base ==4.5.*, vector, mtl, control-monad-loop, data-lens-fd, data-lens-template, optparse-applicative, filepath, pureMD5, stm, bytestring
+executable ll-simulator
+  hs-source-dirs:      dist
+  main-is:             ../main.hs
+  build-depends:       base ==4.5.*
+                     , simulator
 
-executable ll-ai-greedy2
-  main-is:             AI/Greedy2.hs
-  other-modules:       Ans, LL,  Option, Pos, Provider
-  build-depends:       base ==4.5.*, vector, mtl, control-monad-loop, data-lens-fd, data-lens-template, optparse-applicative, filepath, pureMD5, stm, bytestring
+executable ll-ai-greedy
+  hs-source-dirs:      dist
+  main-is:             ../AI/Greedy.hs
+  build-depends:       base ==4.5.*, simulator
+                     , vector, data-lens-fd, mtl, control-monad-loop, stm
+
+-- executable ll-ai-greedy2
+--   main-is:             AI/Greedy2.hs
+--   other-modules:       Ans, LL,  Option, Pos, Provider
+--   build-depends:       base ==4.5.*, simulator

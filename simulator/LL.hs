@@ -126,19 +126,28 @@ showBoard = do
 
 simulate :: Opt.Option -> [String] -> MVar Ans.Ans -> IO Result
 simulate opt bd mVarAns = do
-  runLLT bd $ once $ do
-    repeatLoopT $ do
-      when (Opt.verbose opt) $ lift . lift $ showStatus
-      ans <- liftIO $ takeMVar mVarAns
-      let mv = case ans of
-            Ans.End -> 'A'
-            Ans.Cont ch -> ch
-      res <- lift . lift $ simulateStep mv
+  runLLT bd $ do
+    res <- once $ do
+      repeatLoopT $ do
+        when (Opt.verbose opt) $ lift . lift $ showStatus
+        ans <- liftIO $ takeMVar mVarAns
+        let mv = case ans of
+              Ans.End -> 'A'
+              Ans.Cont ch -> ch
+        res <- lift . lift $ simulateStep mv
 
-      case res of
-        Cont -> continue
-        _ -> lift $ exitWith res
-    exitWith Cont
+        case res of
+          Cont -> continue
+          _ -> lift $ exitWith res
+      exitWith Cont
+
+    case res of
+      Win   sc -> liftIO $ printf "You Win: %d\n" sc
+      Abort sc -> liftIO $ printf "Aborted: %d\n" sc
+      Dead  sc -> liftIO $ printf "You Died: %d\n" sc
+      Cont     -> liftIO $ printf "Not enough input\n"
+    showStatus
+    return res
 
 simulateStep :: (Functor m, Monad m, MonadIO m) => Char -> LLT m Result
 simulateStep mv = do
@@ -220,11 +229,11 @@ simulateStep mv = do
     a <- liftIO $ readCell bd  nx (ny + 1)
     b <- liftIO $ readCell nbd nx (ny + 1)
     when (a /= '*' && b == '*') $ do -- DEATH!!
-      liftIO $ putStrLn "You Died"
+      liftIO $ GM.move bd nbd
       exitWith $ Dead $ lms * 25 - step
 
     when (mv == 'A') $ do
-      liftIO $ putStrLn "Aborted"
+      liftIO $ GM.move bd nbd
       exitWith $ Abort $ lms * 50 - step
 
     liftIO $ GM.move bd nbd

@@ -218,8 +218,8 @@ simulateStep mv = do
 
     -- upadte
     nbd <- liftIO $ VM.replicateM h $ UM.replicate w ' '
-    foreach [0..h-1] $ \y -> do
-      foreach [0..w-1] $ \x -> do
+    forM_ [0..h-1] $ \y -> do
+      forM_ [0..w-1] $ \x -> do
         writeCell nbd x y =<< readCell bd x y
 
         c  <- readCell bd x       y

@@ -1,4 +1,4 @@
-module AI (autoSolver) where
+module Main (main) where
 
 import Control.Applicative
 import Control.Concurrent.STM
@@ -15,21 +15,22 @@ import qualified Data.Vector.Generic.Mutable as GM
 
 import System.IO
 
+import           AI.Common
 import qualified Ans as Ans
 import           LL
 import           Pos
+import           DefaultMain
 
-directions = [('L', Pos (-1) 0), 
-              ('R', Pos 1 0), 
-              ('U', Pos 0 1),
-              ('D', Pos 0 (-1))
-            ]
+
+
+main = defaultMain greedySolver
+
 
 atomift :: (MonadIO m) => STM a -> m a
 atomift = liftIO . atomically 
 
-autoSolver :: (MonadIO m) => Solver m
-autoSolver = withBackup $ do
+greedySolver :: (MonadIO m) => Solver m
+greedySolver = safetynet $ do
   bd <- access llBoardL  
   guide <- liftIO $ V.unsafeThaw =<< V.mapM UM.clone =<< V.unsafeFreeze bd  
   let h = GM.length bd

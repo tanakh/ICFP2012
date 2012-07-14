@@ -43,10 +43,11 @@ import           Pos
 data Resource = 
   Resource {
     dijkstraMaps :: IORef (Map.Map String (Field Double)),
-    submitter :: Tejun -> IO ()
+    submitter :: Tejun -> IO (),
+    stepVisualize :: Bool
            }
 initResource :: IO Resource
-initResource = Resource <$> newIORef (Map.empty) <*> pure (\_ -> return ())
+initResource = Resource <$> newIORef (Map.empty) <*> pure (\_ -> return ()) <*> pure False
 
 getCurrentTime :: IO Int
 getCurrentTime = read . show <$> epochTime
@@ -68,7 +69,8 @@ main = do
       let res = res0{
           submitter  = \tejun ->  do
             modifyIORef tejunRef (max tejun)
-            when (Option.verbose opt) $ printe tejun
+            when (Option.verbose opt) $ printe tejun,
+          stepVisualize = (Option.verbose opt)
         }
       runLLT txt $ simpleSolver res config
       Tejun sco res rep <- readIORef tejunRef
@@ -136,8 +138,7 @@ waitOhagi opt startTime bestTejun = do
 isEffectiveMove :: (Functor m, MonadIO m) => Char -> LLT m Bool
 isEffectiveMove hand = do
   h1 <- access llHashL
-  (res,h2) <- withBackup $ do
-    simulateStep hand
+  (res,h2) <- withStep hand $ do
     res' <- access llResultL    
     h2'  <-access llHashL
     return (res', h2')
@@ -163,7 +164,8 @@ simpleSolver resource config = do
   step <- access llStepL
   let time :: Double
       time = fromIntegral step
-
+  
+  when (stepVisualize resource) showBoard                          
 
   -- treat each wind
   forM_ (windAtom config) $ \ (wave, windWave) -> do

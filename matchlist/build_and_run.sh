@@ -1,7 +1,7 @@
 #!/bin/bash
 
-MATCHDIR=$(realpath $(dirname $0))
-PROJECT_ROOT=$(dirname $MATCHDIR)
+MATCHDIR=$(readlink -f $(dirname $0))
+PROJECT_ROOT=$(readlink -f "$MATCHDIR/..")
 
 echo $MATCHDIR
 echo $PROJECT_ROOT

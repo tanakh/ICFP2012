@@ -192,25 +192,23 @@ simulateStep :: (Functor m, Monad m, MonadIO m) => Char -> LLT m Result
 simulateStep mv = do
   step <- access llStepL
   bd <- access llBoardL
-  Pos cx cy <- access llPosL
   lms <- access llLambdasL
   lambdaNum <- access llTotalLambdasL
-
   (w, h) <- getSize
 
   stat <- backupState
   llHistL %= (stat:)
   llReplayL %= (mv:)
 
-  once $ do
-    cont <- case mv of
-      'L' -> lift $ move (-1) 0
-      'R' -> lift $ move 1    0
-      'U' -> lift $ move 0    1
-      'D' -> lift $ move 0    (-1)
-      'W' -> return Cont
-      'A' -> return Cont -- abort process is below
+  cont <- case mv of
+    'L' -> move (-1) 0
+    'R' -> move 1    0
+    'U' -> move 0    1
+    'D' -> move 0    (-1)
+    'W' -> return Cont
+    'A' -> return Cont -- abort process is below
 
+  once $ do
     case cont of
       Cont -> return ()
       _ -> exitWith cont
@@ -265,39 +263,34 @@ simulateStep mv = do
     when (a /= '*' && b == '*') $ do -- DEATH!!
       exitWith $ Dead $ lms * 25 - step
 
-    lift $ do
-      llStepL += 1
-      llLambdasL ~= lms
-      return Cont
+    lift $ llStepL += 1
+    return Cont
 
 move :: (MonadIO m, Functor m) => Int -> Int -> LLT m Result
 move dx dy = do
   Pos cx cy <- access llPosL
   bd <- access llBoardL
-  (w, h) <- getSize
   step <- access llStepL
   lms  <- access llLambdasL
   let (nx, ny) = (cx + dx, cy + dy)
 
   once $ do
-    when (nx >= 0 && nx < w && ny >= 0 && ny < h) $ do
-      c <- readCell bd nx ny
-      if c `elem` " .O\\"
-        then do
+    c <- readCell bd nx ny
+    if c `elem` " .O\\"
+      then do
+      writeCell bd cx cy ' '
+      writeCell bd nx ny 'R'
+      when (c == 'O') $ exitWith $ Win $ lms * 75 - step
+      when (c == '\\') $ lift $ void $ llLambdasL += 1
+      lift $ void $ llPosL ~= Pos nx ny
+      else do
+      let (n2x, n2y) = (nx + dx, ny + dy)
+      c2 <- readCell bd n2x n2y
+      when (c2 == ' ') $ do
         writeCell bd cx cy ' '
         writeCell bd nx ny 'R'
-        when (c == 'O') $ exitWith $ Win $ lms * 75 - step
-        when (c == '\\') $ lift $ void $ llLambdasL += 1
+        writeCell bd n2x n2y '*'
         lift $ void $ llPosL ~= Pos nx ny
-        else do
-        let (n2x, n2y) = (nx + dx, ny + dy)
-        when (dy == 0 && c == '*' && n2x >= 0 && n2x < w) $ do
-          c2 <- readCell bd n2x n2y
-          when (c2 == ' ') $ do
-            writeCell bd cx cy ' '
-            writeCell bd nx ny 'R'
-            writeCell bd n2x n2y '*'
-            lift $ void $ llPosL ~= Pos nx ny
     exitWith Cont
 
 getSize :: (MonadIO m) => LLT m (Int, Int)

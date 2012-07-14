@@ -64,7 +64,7 @@ staticScore valueField = do
   pos <- access llPosL
   futureScore <- unsafeReadF valueField pos
   step <- access llStepL
-  return $ aScore + 0*step + futureScore)
+  return $ aScore + 0*step + futureScore
 
 
 

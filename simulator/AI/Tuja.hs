@@ -30,7 +30,6 @@ import Text.Printf
 import           AI.Cooking
 import           AI.Common
 import           AI.GorinNoSho
-import           AI.LearnedConfig
 import qualified Ans as Ans
 import           DefaultMain
 import qualified Flood
@@ -105,8 +104,8 @@ launcher population submitQ txt = forever $ do
   when (pop < 30) $ do
     res0 <- initResource
     let res = res0 { submitter = \x -> atomically $ writeTQueue submitQ x}
-    --config <- randomConfig theRecipe
-    config <- choose learnedConfigs
+    config <- randomConfig theRecipe
+    --    config <- choose learnedConfigs
     forkIO $ do
       atomically $ modifyTVar population (1+)
       runLLT txt $ simpleSolver res config

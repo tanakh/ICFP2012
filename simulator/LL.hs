@@ -7,18 +7,18 @@ module LL (
   simulate,
 
   -- the LLT monad
-  LLT, runLLT,
-  Solver, Result(..),
+  LLT, runLLT, Solver,
 
   -- exec step, and undo
   simulateStep, undo,
-  score, abortScore, deadScore, winScore,
+  isEnd, score, abortScore, deadScore, winScore,
 
   -- aux
   getSize,
   forPos, loopPos,
   whenInBoundPos,
   readPos, readPosM, writePos,
+  getReplay,
 
   -- full backup, and restore (maybe heave...)
   backupState, restoreState, withBackup,
@@ -35,7 +35,6 @@ import Control.Monad
 import Control.Monad.Error
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Loop
-import Data.Digest.Pure.MD5
 import Data.IORef
 import Data.Lens
 import Data.List
@@ -153,6 +152,9 @@ showBoard = do
       hPutStr stderr =<< forM [0..w-1] (\x -> readPos llBoard $ Pos x y)
       hPutStrLn stderr $ if y < wl then "~~~~" else "    "
 
+getReplay :: (Functor m, MonadIO m) => LLT m String
+getReplay = reverse . map pMove <$> access llPatchesL
+
 simulate :: Bool -> Flood.Flood -> [String] -> Solver IO
             -> IO (Result, Int, String) -- (result, score, replay)
 simulate interactive fld bd solver = runLLT fld bd go where
@@ -177,7 +179,7 @@ simulate interactive fld bd solver = runLLT fld bd go where
       else do
       res     <- access llResultL
       Just sc <- score
-      replay  <- reverse . map pMove <$> access llPatchesL
+      replay  <- getReplay
       when interactive $ showStatus
       return (res, sc, replay)
 

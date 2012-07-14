@@ -31,7 +31,7 @@ import qualified Ans as Ans
 import           DefaultMain
 import qualified Flood
 import           LL
-import qualified Option as Opt
+import qualified Option as Option
 import           Pos
 
 newtype Wave = 
@@ -115,39 +115,47 @@ randomMany num m = do
 
 
 
+data Resource = 
+  Resource {
+    dijkstraMaps :: IORef (Map.Map String (Field Double))
+           }
+initResource :: IO Resource
+initResource = Resource <$> newIORef (Map.empty)
+
 
 main :: IO ()
 main = do
-  opt <- Opt.parseIO  
-  txt <- case Opt.input opt of
-    Opt.Stdin -> getContents
-    Opt.InputFile fn -> readFile fn
+  opt <- Option.parseIO  
+  txt <- case Option.input opt of
+    Option.Stdin -> getContents
+    Option.InputFile fn -> readFile fn
   let (txtB,txtM) = span (/="") $ lines txt
       bd0 = reverse txtB
       w = maximum $ map length bd0
       bd = map (take w . (++ repeat ' ')) bd0
       fld = Flood.readFlood $ drop 1 txtM
-  smellRef <- newIORef Nothing
+  res <- initResource
   config <- randomConfig  
   
-  res <- runLLT fld bd $ simpleSolver smellRef config
+  res <- runLLT fld bd $ simpleSolver res config
   
-  let fnInput = case Opt.input opt of
-        Opt.InputFile fp -> fp
-        Opt.Stdin -> "STDIN"
 
-  let fnRec = (printf "record/%s-%d-%s.txt"
-            (dropExtension $ takeFileName fnInput)
-            (scoreResult res)
-            (take 6 $ show $ md5 $ L.pack $ show config)) 
-  hPutStrLn stderr fnRec
-  liftIO $ system "mkdir -p record/"
-  liftIO $ writeFile fnRec $
-    unlines $
-      [show $ scoreResult res,
-       show $ res,
-       show $ config
-      ]
+  when (Option.mode opt == Option.Survey) $ do
+    let fnInput = case Option.input opt of
+          Option.InputFile fp -> fp
+          Option.Stdin -> "STDIN"  
+        fnRec = (printf "record/%s-%d-%s.txt"
+              (dropExtension $ takeFileName fnInput)
+              (scoreResult res)
+              (take 6 $ show $ md5 $ L.pack $ show config)) 
+    hPutStrLn stderr fnRec
+    liftIO $ system "mkdir -p record/"
+    liftIO $ writeFile fnRec $
+      unlines $
+        [show $ scoreResult res,
+         show $ res,
+         show $ config
+        ]
 
 
 
@@ -155,10 +163,11 @@ main = do
 isEffectiveMove :: (MonadIO m) => Char -> LLT m Bool
 isEffectiveMove hand = return True
 
-simpleSolver :: (Functor m, MonadIO m) => IORef (Maybe (Field Double)) -> Config 
+simpleSolver :: (Functor m, MonadIO m) 
+                => Resource
+                -> Config 
                 -> LLT m Result
-simpleSolver smellRef config = do
-  -- setup initial valmap, dijkstra field
+simpleSolver resource config = do
   bd <- access llBoardL
   validHands <- filterM isEffectiveMove "LRUD"  
   -- dono te ga tsuyoinoka; watashi kininarimasu! 
@@ -167,14 +176,6 @@ simpleSolver smellRef config = do
   let addHyoka hand val =
         liftIO $ modifyIORef hyokaRef (Map.update (Just . (val+)) hand)
   roboPos <- access llPosL
-
-  maybeSmell <- liftIO $ readIORef smellRef
-  smell <- case maybeSmell of
-    Just a -> return a
-    Nothing -> do
-      b <- newF (1::Double)
-      liftIO $ writeIORef smellRef $ Just b
-      return b
 
   step <- access llStepL
   let time :: Double
@@ -190,9 +191,17 @@ simpleSolver smellRef config = do
       addHyoka hand val
   -- treat each search
   forM_ (searchAtom config) $ \ (wave, srcStr, passStr) -> do
+    dm <- liftIO $ readIORef $ dijkstraMaps resource
+    let maybeSmell = Map.lookup srcStr dm
+    smell <- case maybeSmell of
+      Just a -> return a
+      Nothing -> do
+        b <- newF 0
+        liftIO $ modifyIORef (dijkstraMaps resource) $ 
+          Map.insert srcStr b
+        return b
     dijkstra smell srcStr passStr 1
     updateF smell (\x -> if isPassable x then 1/x else 0)
-    -- showF (wideShow 5) smell --debug
     forM_ validHands $ \hand -> do
       smellAt <- unsafeReadF smell (roboPos + hand2pos hand)
       addHyoka hand $ (sinh . toAmp time) wave * smellAt
@@ -205,8 +214,14 @@ simpleSolver smellRef config = do
           snd $ last $ sort $  
           map (\(hand,val) -> (val,hand)) $
           Map.toList $ hyokaMap
-
+  
+  lam0 <- access llLambdasL
   res <- simulateStep ansHand
+  lam1 <- access llLambdasL
+  when (lam1 /= lam0) $ do
+    sco <- abortScore
+    rep <- reverse <$> access llReplayL
+    printe (Abort sco, rep)
   case res of
-    Cont -> simpleSolver smellRef config
+    Cont -> simpleSolver resource config
     _        -> return res

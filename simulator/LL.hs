@@ -104,6 +104,7 @@ data Result
   | Abort Int
   | Dead Int
   | Cont
+  | Skip
   deriving (Show)
 
 scoreResult :: Result -> Int
@@ -210,10 +211,12 @@ simulateStep mv = do
     'D' -> move 0    (-1)
     'W' -> return Cont
     'A' -> return Cont -- abort process is below
+    _   -> return Skip -- next step
 
   once $ do
     case cont of
       Cont -> return ()
+      Skip -> continueWith cont
       _ -> exitWith cont
 
     -- upadte

@@ -372,9 +372,6 @@ loopPos m = do
   foreach [ Pos x y | y <- [0..h-1], x <- [0..w-1] ] $ \pos -> do
     m pos
 
-whenInBound :: (MonadIO m, UM.Storable b)
-            => VM.IOVector (UM.IOVector b)
-            -> Int -> Int -> IO a -> IO a -> m a
 whenInBound bd x y def action = liftIO $ do
   let h = GM.length bd
   w <- GM.length <$> GM.read bd 0
@@ -387,33 +384,24 @@ readCell bd x y = whenInBound bd x y (return '#') $ do
   row <- GM.read bd y
   GM.read row x
 
-readCellMaybe :: (MonadIO m, UM.Storable a)
-              => VM.IOVector (UM.IOVector a)
-              -> Int -> Int -> m (Maybe a)
 readCellMaybe bd x y = whenInBound bd x y (return Nothing) $ do
   row <- GM.read bd y
   Just <$> GM.read row x
 
-readCellList :: (MonadIO m, UM.Storable a) => VM.IOVector (UM.IOVector a) -> Int -> Int -> m [a]
 readCellList bd x y = whenInBound bd x y (return []) $ do
   row <- GM.read bd y
   (:[]) <$> GM.read row x
 
-writeCell :: (MonadIO m, UM.Storable a) => VM.IOVector (UM.IOVector a) -> Int -> Int -> a -> m ()
 writeCell bd x y v = whenInBound bd x y (return ()) $ do
   row <- GM.read bd y
   GM.write row x v
 
-readPos :: MonadIO m => Board -> Pos -> m Char
 readPos bd (Pos x y) = readCell bd x y
 
-writePos :: (MonadIO m, UM.Storable a) => VM.IOVector (UM.IOVector a) -> Pos -> a -> m ()
 writePos bd (Pos x y) v = writeCell bd x y v
 
-readPosMaybe :: (MonadIO m, UM.Storable a) => VM.IOVector (UM.IOVector a) -> Pos -> m (Maybe a)
 readPosMaybe bd (Pos x y) = readCellMaybe bd x y
 
-readPosList :: (MonadIO m, UM.Storable a) => VM.IOVector (UM.IOVector a) -> Pos -> m [a]
 readPosList bd (Pos x y) = readCellList bd x y
 
 ll = lift . lift

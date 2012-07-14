@@ -69,6 +69,9 @@ main = do
   config <- randomConfig
   res <- defaultMainRes $ simpleSolver smellRef $ config
   opt <- Opt.parseIO  
+  when (Opt.mode opt == Opt.Ninja) $ do
+    printe "NINJA! NINJANANDE! KOWAII"
+    
   let fnInput = case Opt.input opt of
         Opt.InputFile fp -> fp
         Opt.Stdin -> "STDIN"

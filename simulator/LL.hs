@@ -4,7 +4,6 @@
 module LL (
   LLT, runLLT,
   Solver,
-  Result,
   simulate,
   simulateStep, undo,
   move, moveC,
@@ -53,6 +52,7 @@ import qualified Option
 import qualified Flood
 import Pos
 import State
+import Communicate(Result(..))
 
 newtype LLT m a
   = LLT { unLLT :: StateT LLState m a }
@@ -130,12 +130,6 @@ runLLT fld bdl m = do
         }
   evalStateT (unLLT m) initState
 
-data Result
-  = Win Int
-  | Abort Int
-  | Dead Int
-  | Cont
-  deriving (Show)
 
 scoreResult :: Result -> Int
 scoreResult (Win n) = n

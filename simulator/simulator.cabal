@@ -19,6 +19,7 @@ library
   exposed-modules:     Ans
                        AI.Common
                        AI.GorinNoSho
+                       Communicate
                        DefaultMain
                        Flood
                        LL

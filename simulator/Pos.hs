@@ -8,17 +8,22 @@ module Pos where
 -- (50,60)
 -- >>> -Pos 4 3
 -- (-4,-3)
+-- >>> Pos 1.2 3
+-- (1.2,3.0)
 --
 
-data Pos = Pos { px :: Int, py :: Int } deriving (Eq, Ord)
+type Pos = PosOf Int
+type Dpos = PosOf Double
 
-instance Show Pos where
+data PosOf a = Pos { px :: a, py :: a } deriving (Eq, Ord)
+
+instance Show a => Show (PosOf a) where
   show (Pos x y) = show (x,y)
 
-norm :: Pos -> Int
+norm :: (Num a) => PosOf a -> a
 norm (Pos x y) = abs x + abs y
 
-instance Num Pos where
+instance (Num a) => Num (PosOf a) where
   (Pos x1 y1) + (Pos x2 y2) = (x1+x2) `Pos` (y1+y2)
   (Pos x1 y1) - (Pos x2 y2) = (x1-x2) `Pos` (y1-y2)
   (Pos x1 y1) * (Pos x2 y2) = (x1*x2) `Pos` (y1*y2)

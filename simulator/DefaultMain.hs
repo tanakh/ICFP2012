@@ -35,5 +35,5 @@ defaultMain theSolver = do
     Opt.Auto -> do
       return $ theSolver
 
-  when (Opt.verbose opt) $ do
-    print =<< simulate opt fld bd solver
+  res <- simulate opt fld bd solver
+  when (Opt.verbose opt) $ print res

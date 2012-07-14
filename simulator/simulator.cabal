@@ -43,6 +43,13 @@ executable ll-simulator
   build-depends:       base ==4.5.*
                      , simulator
 
+executable ll-ai-simple
+  ghc-options:         -O3
+  hs-source-dirs:      dist
+  main-is:             ../AI/Simple.hs
+  build-depends:       base ==4.5.*, simulator, mtl
+
+
 executable ll-ai-greedy
   ghc-options:         -O3
   hs-source-dirs:      dist

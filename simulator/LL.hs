@@ -39,7 +39,7 @@ data LLState
     , llTotalLambdas :: Int
     , llFlood        :: Flood.Flood
     , llPos          :: Pos
-    , llLiftPos      :: Pos    
+    , llLiftPos      :: Pos
     , llBoard        :: Board
     , llWaterStep    :: Int
     , llHist         :: [LLState]
@@ -97,7 +97,7 @@ runLLT fld bdl m = do
     readIORef ior
 
   let initState = LLState
-        { llStep = 1
+        { llStep = 0
         , llLambdas = 0
         , llTotalLambdas = lambdaNum
         , llPos = Pos cx cy
@@ -115,7 +115,6 @@ data Result
   | Abort Int
   | Dead Int
   | Cont
-  | Skip
   deriving (Show)
 
 scoreResult :: Result -> Int
@@ -124,20 +123,20 @@ scoreResult (Abort n) = n
 scoreResult (Dead n) = n
 scoreResult _ = assert False undefined
 
-winScore, abortScore, deathScore :: MonadIO m => LLT m Int  
+winScore, abortScore, deathScore :: MonadIO m => LLT m Int
 winScore = do
   step <- access llStepL
-  lms <- access llLambdasL  
+  lms <- access llLambdasL
   return  (lms * 75 - step)
 
 abortScore = do
   step <- access llStepL
-  lms <- access llLambdasL 
+  lms <- access llLambdasL
   return (lms * 50 - step)
 
 deathScore = do
   step <- access llStepL
-  lms <- access llLambdasL     
+  lms <- access llLambdasL
   return (lms * 25 - step)
 
 showStatus :: MonadIO m => LLT m ()
@@ -233,23 +232,29 @@ undo = do
 
 simulateStep :: (Functor m, MonadIO m) => Char -> LLT m Result
 simulateStep mv = do
+  cont' <- moveC mv
+  case cont' of
+    Just cont -> do
+      stat <- backupState
+      llHistL %= (stat:)
+      llReplayL %= (mv:)
+      simulateStep' cont
+    Nothing -> return Cont
+
+simulateStep' :: (Functor m, MonadIO m) => Result -> LLT m Result
+simulateStep' cont = do
   fld  <- access llFloodL
   step <- access llStepL
   bd   <- access llBoardL
   lambdaNum <- access llTotalLambdasL
   (w, h) <- getSize
 
-  stat <- backupState
-  llHistL %= (stat:)
-  llReplayL %= (mv:)
-
-  cont <- moveC mv
   lms <- access llLambdasL
 
   once $ do
     case cont of
       Cont -> return ()
-      Skip -> continueWith Cont
+      Abort _ -> return () -- abort process is below
       _ -> exitWith cont
 
     -- update
@@ -287,25 +292,27 @@ simulateStep mv = do
 
     lift $ llBoardL ~= nbd
 
-    when (mv == 'A') $ do
-      exitWith $ Abort $ lms * 50 - step
+    case cont of
+      Abort _ -> exitWith $ Abort $ lms * 50 - step
+      _ -> return()
+
+    lift $ llStepL += 1  -- increment step if it is not Abort
 
     Pos nx ny <- lift $ access llPosL
     a <- readCell bd  nx (ny + 1)
     b <- readCell nbd nx (ny + 1)
     when (a /= '*' && b == '*') $ do -- DEATH!!
-      exitWith $ Dead $ lms * 25 - step
+      exitWith $ Dead $ lms * 25 - (step + 1)
 
     let wl = Flood.waterLevel step fld
     ws0 <- lift $ access llWaterStepL
     let ws = if ny < wl  -- in the water
                 then ws0 + 1
                 else 0
-    when (ws > Flood.waterproof fld) $ do
-      exitWith $ Dead $ lms * 25 - step
     lift $ llWaterStepL ~= ws
+    when (ws > Flood.waterproof fld) $ do
+      exitWith $ Dead $ lms * 25 - (step + 1)
 
-    lift $ llStepL += 1
     return Cont
 
 move :: (MonadIO m, Functor m) => Int -> Int -> LLT m Result
@@ -328,7 +335,9 @@ move dx dy = do
         when (c1 == '\\') $ void $ llLambdasL += 1
         llPosL ~= p1
         if c1 == 'O'
-          then return $ Win $ lms * 75 - step
+          then do
+            llStepL += 1
+            Win <$> winScore
           else return Cont
       | dy == 0 && c0 == 'R' && c1 == '*' && c2 == ' ' -> do
         writePos bd p0 ' '
@@ -339,15 +348,15 @@ move dx dy = do
     _ ->
       return Cont
 
-moveC :: (MonadIO m, Functor m) => Char -> LLT m Result
+moveC :: (MonadIO m, Functor m) => Char -> LLT m (Maybe Result)
 moveC c = case c of
-  'L' -> move (-1) 0
-  'R' -> move 1    0
-  'U' -> move 0    1
-  'D' -> move 0    (-1)
-  'W' -> return Cont
-  'A' -> return Cont -- abort process is below
-  _   -> return Skip -- next step
+  'L' -> Just <$> move (-1) 0
+  'R' -> Just <$> move 1    0
+  'U' -> Just <$> move 0    1
+  'D' -> Just <$> move 0    (-1)
+  'W' -> return (Just Cont)
+  'A' -> return (Just $ Abort 0)
+  _ -> return Nothing
 
 getSize :: (MonadIO m) => LLT m (Int, Int)
 getSize = do
@@ -376,6 +385,7 @@ whenInBound bd x y def action = liftIO $ do
     then action
     else def
 
+readCell :: MonadIO m => Board -> Int -> Int -> m Char
 readCell bd x y = whenInBound bd x y (return '#') $ do
   row <- GM.read bd y
   GM.read row x
@@ -393,9 +403,11 @@ writeCell bd x y v = whenInBound bd x y (return ()) $ do
   GM.write row x v
 
 readPos bd (Pos x y) = readCell bd x y
+
 writePos bd (Pos x y) v = writeCell bd x y v
 
 readPosMaybe bd (Pos x y) = readCellMaybe bd x y
+
 readPosList bd (Pos x y) = readCellList bd x y
 
 ll = lift . lift

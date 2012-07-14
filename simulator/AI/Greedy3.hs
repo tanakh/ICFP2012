@@ -90,15 +90,16 @@ evaluateHand depth hand
       roboPos0 <- access llPosL
       result <- simulateStep hand
       roboPos1 <- access llPosL
+
       let addReturn = (\val -> return (val, [roboPos1]))
       (\(val, future) -> (val, roboPos0 : future)) <$>
         case result of
           Win n   -> addReturn $ grandValue n
           Abort n -> addReturn $ grandValue n
           Dead n  -> addReturn $ grandValue n
-          Skip    -> addReturn $ grandValue (-9999999)
           Cont    -> 
             head . sort <$> mapM (evaluateHand (depth-1)) "LRUDA"
+
 
 dijkstra guide = do
   bd <- access llBoardL    

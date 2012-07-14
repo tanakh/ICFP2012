@@ -49,8 +49,9 @@ addCacheEntry hmr st = do
 
 main :: IO ()
 main = defaultMain $ do
+  valueField <- newF (0::Int)
   hmr <- liftIO $ newIORef HM.empty
-  (mov, sc) <- withBackup $ search hmr 10
+  (mov, sc) <- withBackup $ search valueField hmr  10
   liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++ [mov]
   return $ Ans.Cont mov
 
@@ -70,10 +71,10 @@ best ls m = do
         return (x, r)
   return $ maximumBy (comparing snd) res
 
-search :: (MonadIO m, Functor m) => Cache -> Int -> LLT m (Char, Int)
-search cache fuel
+search :: (MonadIO m, Functor m) => Field Int -> Cache -> Int -> LLT m (Char, Int)
+search valueField cache fuel
   | fuel <= 0 =
-    (undefined,) <$> staticScore
+    (undefined,) <$> staticScore valueField
   | otherwise = do
     st <- get
     ok <- liftIO $ addCacheEntry cache st
@@ -84,7 +85,7 @@ search cache fuel
         -- liftIO $ putStrLn $ "fuel: " ++ show fuel ++ ", mov: " ++ [mov]
         -- showStatus
         case mb of
-          Nothing -> snd <$> search cache (fuel - 1)
+          Nothing -> snd <$> search valueField cache (fuel - 1)
           Just sc -> return sc
       else do
       return ('W', minf)

@@ -53,6 +53,7 @@ import qualified Flood
 import Pos
 import State
 import Communicate(Result(..))
+import qualified Communicate
 
 newtype LLT m a
   = LLT { unLLT :: StateT LLState m a }
@@ -231,7 +232,8 @@ simulate opt fld bd solver = do
            (take 6 $ show $ md5 $ L.pack rep))
           rep
 
-    when (Option.input opt == Option.Stdin) $ do
+    when (isNothing (Option.commChan opt) &&
+          Option.input opt == Option.Stdin) $ do
       liftIO $ putStrLn rep
       liftIO $ hFlush stdout
     return res

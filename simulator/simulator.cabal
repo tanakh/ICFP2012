@@ -18,6 +18,7 @@ library
   ghc-options:         -O
   exposed-modules:     Ans
                        AI.Common
+                       AI.Cooking
                        AI.GorinNoSho
                        DefaultMain
                        Flood
@@ -40,6 +41,7 @@ library
                      , bytestring
                      , pqueue
                      , process
+                     , random
 
 executable ll-simulator
   ghc-options:         -O -auto-all

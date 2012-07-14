@@ -321,6 +321,19 @@ getSize = do
   w <- liftIO $ GM.length <$> GM.read bd 0
   return (w, h)
 
+forPos :: MonadIO m => (Pos -> LLT m ()) -> LLT m ()
+forPos m = do
+  (w, h) <- getSize
+  forM_ [0..h-1] $ \y -> do
+    forM_ [0..w-1] $ \x -> do
+      m (Pos x y)
+
+loopPos :: MonadIO m => (Pos -> LoopT c () (LLT m) c) -> LLT m ()
+loopPos m = do
+  (w, h) <- getSize
+  foreach [ Pos x y | y <- [0..h-1], x <- [0..w-1] ] $ \pos -> do
+    m pos
+
 whenInBound bd x y def action = liftIO $ do
   let h = GM.length bd
   w <- GM.length <$> GM.read bd 0

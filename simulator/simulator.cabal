@@ -24,3 +24,6 @@ executable ll-simulator
                      , data-lens-fd
                      , data-lens-template
                      , optparse-applicative
+                     , filepath
+                     , pureMD5
+                     , bytestring

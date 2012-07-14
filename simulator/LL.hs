@@ -10,6 +10,8 @@ import Control.Exception
 import Control.Monad
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Loop
+import qualified Data.ByteString.Lazy.Char8 as L
+import Data.Digest.Pure.MD5
 import Data.IORef
 import Data.Lens
 import Data.Lens.Template
@@ -19,6 +21,7 @@ import qualified Data.Vector.Storable as U
 import qualified Data.Vector.Storable.Mutable as UM
 import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Generic.Mutable as GM
+import System.FilePath
 import Text.Printf
 
 import qualified Ans as Ans
@@ -35,6 +38,7 @@ data LLState
     , llPos          :: Pos
     , llBoard        :: Board
     , llHist         :: [LLState]
+    , llReplay       :: [Char]
     }
 nameMakeLens ''LLState $ \name -> Just (name ++ "L")
 
@@ -87,6 +91,7 @@ runLLT bdl m = do
         , llPos = Pos cx cy
         , llBoard = bd
         , llHist = []
+        , llReplay = []
         }
   evalStateT (unLLT m) initState
 
@@ -153,6 +158,23 @@ simulate opt bd mVarAns mVarState = do
         Dead  sc -> liftIO $ printf "You Died: %d\n" sc
         Cont     -> liftIO $ printf "Not enough input\n"
       showStatus
+
+    rep <- access llReplayL
+    case Opt.replay opt of
+      Opt.ReplayNothing -> do
+        when (Opt.verbose opt) $ do
+          liftIO $ putStrLn $ reverse rep
+      Opt.ReplayDefault -> do
+        let fn = case Opt.input opt of
+              Opt.InputFile fp -> fp
+              Opt.Stdin -> "STDIN"
+        liftIO $ writeFile
+          (printf "%s-%d-%s-replay.txt"
+           (dropExtension $ takeFileName fn)
+           (scoreResult res)
+           (take 6 $ show $ md5 $ L.pack rep))
+          rep
+
     return res
 
 undo :: MonadIO m => LLT m ()
@@ -162,7 +184,6 @@ undo = do
     [] -> do
       liftIO $ putStrLn "cannot undo"
     (top:_) -> do
-      llHistL %= tail
       put top
 
 simulateStep :: (Functor m, Monad m, MonadIO m) => Char -> LLT m Result
@@ -178,6 +199,7 @@ simulateStep mv = do
 
   stat <- backupState
   llHistL %= (stat:)
+  llReplayL %= (mv:)
 
   let move dx dy = do
         let (nx, ny) = (cx + dx, cy + dy)

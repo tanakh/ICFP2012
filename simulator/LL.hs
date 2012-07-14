@@ -115,7 +115,6 @@ data Result
   | Abort Int
   | Dead Int
   | Cont
-  | Skip
   deriving (Show)
 
 scoreResult :: Result -> Int
@@ -233,23 +232,29 @@ undo = do
 
 simulateStep :: (Functor m, MonadIO m) => Char -> LLT m Result
 simulateStep mv = do
+  cont' <- moveC mv
+  case cont' of
+    Just cont -> do
+      stat <- backupState
+      llHistL %= (stat:)
+      llReplayL %= (mv:)
+      simulateStep' cont
+    Nothing -> return Cont
+
+simulateStep' :: (Functor m, MonadIO m) => Result -> LLT m Result
+simulateStep' cont = do
   fld  <- access llFloodL
   step <- access llStepL
   bd   <- access llBoardL
   lambdaNum <- access llTotalLambdasL
   (w, h) <- getSize
 
-  stat <- backupState
-  llHistL %= (stat:)
-  llReplayL %= (mv:)
-
-  cont <- moveC mv
   lms <- access llLambdasL
 
   once $ do
     case cont of
       Cont -> return ()
-      Skip -> continueWith Cont
+      Abort _ -> return () -- abort process is below
       _ -> exitWith cont
 
     -- update
@@ -287,8 +292,9 @@ simulateStep mv = do
 
     lift $ llBoardL ~= nbd
 
-    when (mv == 'A') $ do
-      exitWith $ Abort $ lms * 50 - step
+    case cont of
+      Abort _ -> exitWith $ Abort $ lms * 50 - step
+      _ -> return()
 
     lift $ llStepL += 1  -- increment step if it is not Abort
 
@@ -342,15 +348,15 @@ move dx dy = do
     _ ->
       return Cont
 
-moveC :: (MonadIO m, Functor m) => Char -> LLT m Result
+moveC :: (MonadIO m, Functor m) => Char -> LLT m (Maybe Result)
 moveC c = case c of
-  'L' -> move (-1) 0
-  'R' -> move 1    0
-  'U' -> move 0    1
-  'D' -> move 0    (-1)
-  'W' -> return Cont
-  'A' -> return Cont -- abort process is below
-  _   -> return Skip -- next step
+  'L' -> Just <$> move (-1) 0
+  'R' -> Just <$> move 1    0
+  'U' -> Just <$> move 0    1
+  'D' -> Just <$> move 0    (-1)
+  'W' -> return (Just Cont)
+  'A' -> return (Just $ Abort 0)
+  _ -> return Nothing
 
 getSize :: (MonadIO m) => LLT m (Int, Int)
 getSize = do

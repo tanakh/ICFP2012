@@ -88,7 +88,6 @@ evaluateHand depth hand
         Abort n -> do 
           return $ grandValue n
         Dead n -> return $ grandValue n
-        Skip -> return $ grandValue (-9999999)
         Cont -> 
           head . sort <$> mapM (evaluateHand (depth-1)) "LRUDA"
 

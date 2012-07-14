@@ -9,7 +9,8 @@ data Option =
     answer :: Answer,
     replay :: Replay,
     verbose :: Bool,
-    mode :: Mode
+    mode :: Mode,
+    timeout :: Int
   }
 
 data Input  = InputFile FilePath | Stdin deriving (Eq, Show)
@@ -58,7 +59,11 @@ parse = Option
           & short 's'
           & transform fs
           & help "Tuja mode 'survey'; (default) ninja")
-
+        <*> strOption (
+          long "timeout"
+          & short 't'
+          & transform read
+          & help "Timeout before submitting the best answer")
   where
     fa str = case str of
       "kbd"  -> Keyboard

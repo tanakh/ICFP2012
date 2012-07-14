@@ -3,6 +3,7 @@ module Main(main) where
 
 import Control.Applicative
 import Control.Concurrent.STM
+import Control.Concurrent
 import Control.Monad
 import Control.Monad.Trans.Loop
 import Control.Monad.Trans
@@ -172,18 +173,33 @@ main = do
 ninjaMain :: Option.Option -> Int -> Flood.Flood -> [String] -> IO ()
 ninjaMain opt startTime fld bd = do
   submitQ <- newTQueueIO 
+  bestTejun <- newTVarIO $ Tejun 0 Abort "A"
   replicateM_ 100 $ do
     res0 <- initResource
     let res = res0 { submitter = \x -> atomically $ writeTQueue submitQ x}
-    return ()
-  waitOhagi opt startTime
+    config <- randomConfig
+    forkIO $ do
+      runLLT fld bd $ simpleSolver res config
+      return ()
+  forkIO $ collector submitQ bestTejun
+  waitOhagi opt startTime bestTejun
 
-waitOhagi opt startTime = do
+collector submitQ bestTejun = forever $do
+  tejun <- atomically $ readTQueue submitQ
+  hPutStrLn stderr $ "receive " ++ show tejun
+  atomically $ modifyTVar bestTejun (max tejun)
+  best <- atomically $ readTVar bestTejun
+  hPutStrLn stderr $ "my best " ++ show best
+  
+waitOhagi opt startTime bestTejun = do
   t <- getCurrentTime
-  when (t > startTime + Option.timeout opt) $ do
-    return ()
-  sleep 1
-  waitOhagi opt startTime
+  case () of 
+    _ | t > startTime + Option.timeout opt -> do
+          Tejun _ _ str <- atomically $ readTVar bestTejun
+          putStrLn str
+      | otherwise -> do
+          sleep 1
+          waitOhagi opt startTime bestTejun
 
 
 isEffectiveMove :: (MonadIO m) => Char -> LLT m Bool

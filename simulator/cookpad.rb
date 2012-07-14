@@ -17,14 +17,13 @@ bestConfs = []
 }
 
 
-open("AI/SecretRecipe.hs",'w'){|fp|
+open("AI/LearnedConfig.hs",'w'){|fp|
   fp.puts <<HS
-module AI.SecretRecipe where
+module AI.LearnedConfig where
 import AI.Cooking
 
-bestConfigs :: [Config]
-
-bestConfigs = [#{bestConfs.join(',')}]
+learnedConfigs :: [Config]
+learnedConfigs = [#{bestConfs.join(',')}]
 HS
 }
 

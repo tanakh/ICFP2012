@@ -9,6 +9,7 @@ import Control.Monad.Trans
 import qualified Data.HashMap.Strict as HM
 import Data.IORef
 import Data.List
+import Data.Lens
 import Data.Word
 import Data.Ord
 import System.IO
@@ -17,6 +18,8 @@ import Ans
 import AI.Common
 import DefaultMain
 import LL
+import AI.GorinNoSho
+
 
 minf :: Int
 minf = -10^(9::Int)
@@ -90,5 +93,14 @@ search valueField cache fuel
       else do
       return ('W', minf)
 
-staticScore :: (MonadIO m, Functor m) => LLT m Int
-staticScore = abortScore
+staticScore :: (MonadIO m, Functor m) => Field Int -> LLT m Int
+staticScore valueField = do
+  aScore <- abortScore
+  pos <- access llPosL
+  futureScore <- unsafeReadF valueField pos
+  step <- access llStepL
+  return $ aScore + 0*step + futureScore
+
+
+
+

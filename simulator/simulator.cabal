@@ -19,6 +19,7 @@ library
   exposed-modules:     Ans
                        AI.Common
                        AI.Cooking
+                       AI.SecretRecipe
                        AI.GorinNoSho
                        DefaultMain
                        Flood

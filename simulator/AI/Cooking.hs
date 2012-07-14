@@ -40,7 +40,14 @@ theRecipe = Recipe
 allChars = "R*L.#\\O "
 
 randomRecipe :: IO Recipe
-randomRecipe = Recipe 
+randomRecipe = do
+  dice <- randomRIO (0,1)
+  if dice < (0.2::Double)
+    then  return theRecipe
+    else  randomRecipe1
+
+randomRecipe1 :: IO Recipe
+randomRecipe1 = Recipe 
   <$> randomRIO (-8, 4) 
   <*> randomRIO (-8, 4) 
   <*> randomRIO (-8, 4) 

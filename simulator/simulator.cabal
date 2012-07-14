@@ -85,4 +85,4 @@ executable ll-ai-tuja
   main-is:             ../AI/Tuja.hs
   build-depends:       base ==4.5.*, simulator, mtl
                        , pqueue,vector, data-lens-fd, mtl, control-monad-loop
-                       , stm, containers, unix
+                       , stm, containers, unix, random

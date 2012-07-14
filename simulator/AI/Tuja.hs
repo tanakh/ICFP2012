@@ -18,6 +18,7 @@ import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Generic.Mutable as GM
 import System.IO
 import System.Posix.Unistd
+import System.Random
 
 import           AI.Common
 import           AI.GorinNoSho
@@ -65,7 +66,24 @@ main = do
         [(Wave [], "\\O", " .")],
       windAtom = 
         [(Wave [(5, 0.05, 0),(5,0,3)], Wave [(1, 0.1, 0)])]
-           }
+      }
+
+choose :: [a] -> IO a
+choose xs = do
+  i <- randomRIO (0,length xs-1)
+  return $ xs !! i
+        
+randomWaveIO :: IO (Wave)
+randomWaveIO = do
+  a  <- exp <$>  randomRIO (0, 2)
+  f  <- (*) <$> randomRIO (-1, 1) <*> (exp <$> randomRIO (-4, 1))
+  p0 <- randomRIO (0, 2*pi)
+  let cpnt1 =  (a,f,p0)
+  dice <- randomRIO (0,1)
+  Wave cpnts <- if dice < (0.7::Double)
+                then randomWaveIO
+                else return $ Wave []
+  return $ Wave $ cpnt1: cpnts
 
 isEffectiveMove :: (MonadIO m) => Char -> LLT m Bool
 isEffectiveMove hand = return True

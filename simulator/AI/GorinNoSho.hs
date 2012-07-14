@@ -14,40 +14,117 @@ import System.IO
 
 import           AI.Common
 import           LL
-
-type Field a = VM.IOVector (VM.IOVector a) 
+import           Pos
 
 printe :: (MonadIO m, Show a) => a -> m ()
 printe = liftIO . hPutStrLn stderr . show
 
-data Terrain = Passable Int | Unknown | Blocked deriving (Eq, Ord, Show)
+type Field a = VM.IOVector (VM.IOVector a) 
 
-terrainSucc :: Terrain -> Terrain
-terrainSucc (Passable n) = Passable $ n+1
-terrainSucc x            = x
+unsafeReadFIO :: Field a -> Pos -> IO a
+unsafeReadFIO field (Pos x y) = do
+  line <- VM.unsafeRead field y
+  VM.unsafeRead line x
 
-dijkstra :: String -> String -> LLT IO (Field Terrain)
-dijkstra sourceStr passableStr = do
+unsafeWriteFIO :: Field a -> Pos -> a -> IO ()
+unsafeWriteFIO field (Pos x y) val = do
+  line <- VM.unsafeRead field y
+  VM.unsafeWrite line x val
+
+unsafeReadF :: (MonadIO m)=>Field a -> Pos -> m a
+unsafeReadF bd r = liftIO $ unsafeReadFIO bd r
+
+unsafeWriteF :: (MonadIO m)=>Field a -> Pos -> a -> m ()
+unsafeWriteF bd r val = liftIO $ unsafeWriteFIO bd r val
+
+readFList :: (Functor m, MonadIO m) => Field a -> Pos -> m [a]
+readFList bd r = whenPosInBound bd r (return []) ((:[]) <$> unsafeReadF bd r)
+
+writeF :: (MonadIO m) => Field a -> Pos -> a -> m ()
+writeF bd r val = whenPosInBound bd r (return ()) (unsafeWriteF bd r val)
+
+convertF :: (MonadIO m ) => Field a -> (a->b) -> LLT m (Field b)
+convertF source f = do
+  (w,h) <- getSize
+  liftIO $ do
+    ret <- VM.new h 
+    forM_ [0..h-1] $ \ y -> do
+      srcLine <- VM.unsafeRead source y
+      line <- VM.new w
+      forM_ [0..w-1] $ \ x -> do
+        a <- VM.unsafeRead srcLine x
+        VM.unsafeWrite line x (f a)
+      VM.unsafeWrite ret y line
+    return ret
+
+updateF :: (MonadIO m ) => Field a -> (a->a) -> LLT m ()
+updateF source f= do
+  (w,h) <- getSize
+  liftIO $ do
+    forM_ [0..h-1] $ \ y -> do
+      srcLine <- VM.unsafeRead source y
+      forM_ [0..w-1] $ \ x -> do
+        a <- VM.unsafeRead srcLine x
+        VM.unsafeWrite srcLine x (f a)
+
+showF :: (MonadIO m ) => (a->String) -> Field a -> LLT m ()
+showF convert bd = do
+  (w,h) <- getSize
+  liftIO $ do
+    maxLenRef <- newIORef 0
+    forM_ [h-1, h-2 .. 0] $ \y -> do
+      forM_ [0..w-1] $ \x -> do
+        a <- unsafeReadFIO bd (Pos x y)
+        modifyIORef maxLenRef (\b -> max b $  length $ convert a)
+    maxLen <- readIORef maxLenRef
+    forM_ [h-1, h-2 .. 0] $ \y -> do
+      forM_ [0..w-1] $ \x -> do
+        a <- unsafeReadFIO bd (Pos x y)
+        let str = convert a 
+            len = length str
+            str2 = (replicate (maxLen-len) ' ') ++ str
+        hPutStr stderr str2
+      hPutStr stderr "\n"
+
+
+class (Eq a, Ord a, Num a) => Terrain a where
+  unknown :: a
+  blocked :: a
+  terrainSucc :: a->a
+  terrainSucc x
+    | x == unknown = x
+    | x == blocked = x
+    | otherwise    = x+1
+
+instance Terrain Int where
+  unknown = minBound-2
+  blocked = minBound-1
+instance Terrain Double where
+  unknown = 1/8901e35
+  blocked = 1/1341e72
+
+dijkstra :: (MonadIO m, Terrain a) => String -> String -> a -> LLT m (Field a)
+dijkstra sourceStr passableStr initVal = do
   bd <- access llBoardL  
   (w,h) <- getSize
-  field <- liftIO $ VM.replicateM h $ VM.replicate w Unknown
+  field <- liftIO $ VM.replicateM h $ VM.replicate w unknown
   probes <- liftIO $ newIORef $ Q.empty
   loopPos $ \ r -> do
     a <- readPos bd r
     case a of
       _ | a `elem` sourceStr   -> 
-           liftIO $ modifyIORef probes $ Q.insert (Passable 1, r) 
+           liftIO $ modifyIORef probes $ Q.insert (initVal, r) 
         | a `elem` passableStr -> return ()
-        | otherwise            -> writePos field r Blocked
+        | otherwise            -> liftIO $ unsafeWriteFIO field r blocked
   while (liftIO ((not . Q.null) <$> readIORef probes)) $ do
     (val, r) <- liftIO $ Q.findMin <$> readIORef probes
     liftIO $ modifyIORef probes Q.deleteMin
-    oldVal <- head <$> readPosList field r
-    when (val < oldVal && oldVal /= Blocked) $ do
-      writePos field r val
+    oldVal <- unsafeReadF field r
+    when (oldVal == unknown || (val < oldVal && oldVal /= blocked)) $ do
+      writeF field r val
       forM_ directions $ \ (_, dr) -> do
         let nr = r + dr
-        newVals <- readPosList field nr
+        newVals <- readFList field nr
         forM_ newVals $ \ _ -> do
           liftIO $ modifyIORef probes $ Q.insert (terrainSucc val, nr)
   return field

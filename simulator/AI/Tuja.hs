@@ -1,5 +1,4 @@
 {- Takusan Utsuto Jissai Atariyasui. -}
-{-# OPTIONS -Wall #-}
 module Main(main) where
 
 import Control.Applicative
@@ -31,6 +30,7 @@ main = defaultMain simpleSolver
 
 simpleSolver :: Solver IO
 simpleSolver = safetynet $ do
-  field <- dijkstra "\\O" " ."
+  field <- dijkstra "\\O" " ." (1::Double) 
+  showF show field
   return $ Ans.Cont 'A'
 

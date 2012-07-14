@@ -385,6 +385,8 @@ whenInBound bd x y def action = liftIO $ do
     then action
     else def
 
+whenPosInBound bd (Pos x y) = whenInBound bd x y
+
 readCell :: MonadIO m => Board -> Int -> Int -> m Char
 readCell bd x y = whenInBound bd x y (return '#') $ do
   row <- GM.read bd y

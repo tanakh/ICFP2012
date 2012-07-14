@@ -39,7 +39,7 @@ data LLState
     , llTotalLambdas :: Int
     , llFlood        :: Flood.Flood
     , llPos          :: Pos
-    , llLiftPos      :: Pos    
+    , llLiftPos      :: Pos
     , llBoard        :: Board
     , llWaterStep    :: Int
     , llHist         :: [LLState]
@@ -124,20 +124,20 @@ scoreResult (Abort n) = n
 scoreResult (Dead n) = n
 scoreResult _ = assert False undefined
 
-winScore, abortScore, deathScore :: MonadIO m => LLT m Int  
+winScore, abortScore, deathScore :: MonadIO m => LLT m Int
 winScore = do
   step <- access llStepL
-  lms <- access llLambdasL  
+  lms <- access llLambdasL
   return  (lms * 75 - step)
 
 abortScore = do
   step <- access llStepL
-  lms <- access llLambdasL 
+  lms <- access llLambdasL
   return (lms * 50 - step)
 
 deathScore = do
   step <- access llStepL
-  lms <- access llLambdasL     
+  lms <- access llLambdasL
   return (lms * 25 - step)
 
 showStatus :: MonadIO m => LLT m ()
@@ -372,6 +372,7 @@ loopPos m = do
   foreach [ Pos x y | y <- [0..h-1], x <- [0..w-1] ] $ \pos -> do
     m pos
 
+whenInBound :: MonadIO m => Board -> Int -> Int -> IO a -> IO a -> m a
 whenInBound bd x y def action = liftIO $ do
   let h = GM.length bd
   w <- GM.length <$> GM.read bd 0
@@ -379,26 +380,36 @@ whenInBound bd x y def action = liftIO $ do
     then action
     else def
 
+readCell :: MonadIO m => Board -> Int -> Int -> m Char
 readCell bd x y = whenInBound bd x y (return '#') $ do
   row <- GM.read bd y
   GM.read row x
 
+readCellMaybe :: MonadIO m => Board -> Int -> Int -> m (Maybe Char)
 readCellMaybe bd x y = whenInBound bd x y (return Nothing) $ do
   row <- GM.read bd y
   Just <$> GM.read row x
 
+readCellList :: MonadIO m => Board -> Int -> Int -> m String
 readCellList bd x y = whenInBound bd x y (return []) $ do
   row <- GM.read bd y
   (:[]) <$> GM.read row x
 
+writeCell :: MonadIO m => Board -> Int -> Int -> Char -> m ()
 writeCell bd x y v = whenInBound bd x y (return ()) $ do
   row <- GM.read bd y
   GM.write row x v
 
+readPos :: MonadIO m => Board -> Pos -> m Char
 readPos bd (Pos x y) = readCell bd x y
+
+writePos :: MonadIO m => Board -> Pos -> Char -> m ()
 writePos bd (Pos x y) v = writeCell bd x y v
 
+readPosMaybe :: MonadIO m => Board -> Pos -> m (Maybe Char)
 readPosMaybe bd (Pos x y) = readCellMaybe bd x y
+
+readPosList :: MonadIO m => Board -> Pos -> m String
 readPosList bd (Pos x y) = readCellList bd x y
 
 ll = lift . lift

@@ -72,13 +72,13 @@ main = do
       let fnInput = case Option.input opt of
             Option.InputFile fp -> fp
             Option.Stdin -> "STDIN"  
-          fnRec = (printf "record/%s-%d-%s-%s.txt"
+          fnRec = (printf "record/%s/%d-%s-%s.txt"
                 (dropExtension $ takeFileName fnInput)
                 (sco)
                 (take 6 $ show $ md5 $ L.pack rep)
                 (take 6 $ show $ md5 $ L.pack $ show config)) 
       when (Option.verbose opt) $ hPutStrLn stderr fnRec
-      liftIO $ system "mkdir -p record/"
+      liftIO $ system $ "mkdir -p record/" ++ (dropExtension $ takeFileName fnInput) ++ "/"
       liftIO $ writeFile fnRec $
         unlines $
           [show $ sco,

@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses, UndecidableInstances #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards, ViewPatterns #-}
 
 module LL (
   -- simulate whole game
@@ -25,6 +25,9 @@ module LL (
 
   -- diagnostic
   showStatus, showBoard,
+
+  -- varidate inputs
+  validInputs, isValidInput,
 
   module State,
   ) where
@@ -106,8 +109,10 @@ runLLT txt m = do
         | (y, row)  <- zip [0..] bdl, (x, cell) <- zip [0..] row, p cell
         ]
 
-  let fld = Flood.readFlood $ drop 1 txtM
+  -- parse flood
+  let fld = Flood.readFlood txtM
 
+  -- parse trampoline
   let tramps  = finds (`elem` ['A' .. 'I'])
       targets = finds (`elem` ['1' .. '9'])
       trampp =
@@ -119,6 +124,11 @@ runLLT txt m = do
               erases = map fst $ filter ((==t).snd) trampp
         ]
 
+  -- parse beard
+  let growth = head $ [ read g | ["Growth", g] <- map words txtM ] ++ [25]
+      razors = head $ [ read r | ["Razors", r] <- map words txtM ] ++ [0]
+
+  -- other info
   let rpos      = snd . head $ finds (=='R')
       lpos      = snd . head $ finds (=='L')
       lambdaNum = length $ finds (=='\\')
@@ -131,6 +141,7 @@ runLLT txt m = do
         , llLiftPos = lpos
         , llFlood = fld
         , llTramp = tramp
+        , llGrowth = growth
 
         , llResult = Cont
         , llStep = 0
@@ -139,6 +150,7 @@ runLLT txt m = do
 
         , llRockPos = sort rocks
         , llWaterStep = 0
+        , llRazors = razors
 
         , llBoard = bd
 
@@ -160,6 +172,11 @@ showStatus = do
 
     printf "water: %02d/%02d\n"
       llWaterStep (Flood.waterproof llFlood)
+
+    printf "growth: %02d/%02d, razors: %d\n"
+      (llGrowth - 1 - (llStep `mod` llGrowth))
+      llGrowth
+      llRazors
 
     when (not $ null llTramp) $ do
       putStrLn $ "trampoline: " ++
@@ -230,15 +247,14 @@ simulateStep mv
           forM_ (reverse wl) $ \(p, v) -> writePos bd p v
           writeIORef wlog []
 
-    moveC mv write
-    commit
-    update write
-    commit
+    moveC mv write >> commit
+    update write commit
 
     diff <- liftIO $ readIORef rlog
     void $ llPatchesL %= \(p:ps) -> (p { pBoardDiff = diff }:ps)
 
 type WriteLogger m = Pos -> Char -> LLT m ()
+type Commit m = LLT m ()
 
 moveC :: (MonadIO m, Functor m) => Char -> WriteLogger m -> LLT m ()
 moveC c = case c of
@@ -246,6 +262,7 @@ moveC c = case c of
   'R' -> move $ Pos 1    0
   'U' -> move $ Pos 0    1
   'D' -> move $ Pos 0    (-1)
+  'S' -> shave
   'W' -> \_ -> return ()
   'A' -> \_ -> return ()
   _   -> assert False undefined
@@ -262,12 +279,13 @@ move d@(Pos _ dy) wlog = do
   c2 <- readPos llBoard p2
 
   case () of
-    _ | c1 `elem` " .O\\" -> do
+    _ | c1 `elem` " .O\\!" -> do
         -- move to empty space
         wlog p0 ' '
         wlog p1 'R'
         when (c1 == '\\') $ void $ llLambdasL += 1
         when (c1 == 'O')  $ void $ llResultL ~= Win
+        when (c1 == '!')  $ void $ llRazorsL += 1
         llPosL ~= p1
         return ()
       | dy == 0 && c1 == '*' && c2 == ' ' -> do
@@ -290,17 +308,37 @@ move d@(Pos _ dy) wlog = do
       | otherwise -> do
         return ()
 
-update :: (Functor m, MonadIO m) => WriteLogger m -> LLT m ()
-update wlog = do
+adjacent :: [Pos]
+adjacent =
+  [ Pos x y | x <- [-1 .. 1], y <- [-1 .. 1], not $ x == 0 && y == 0 ]
+
+shave :: (MonadIO m, Functor m) => WriteLogger m -> LLT m ()
+shave wlog = do
+  LLState {..} <- get
+  when (llRazors > 0) $ do
+    llRazorsL -= 1
+    forM_ adjacent $ \d -> do
+      let np = llPos + d
+      cell <- readPos llBoard np
+      when (cell == 'W') $ wlog np ' '
+
+sortp :: [Pos] -> [Pos]
+sortp = sortBy (comparing $ \(Pos x y) -> (y, x))
+
+update :: (Functor m, MonadIO m) => WriteLogger m -> Commit m -> LLT m ()
+update wlog commit = do
   LLState {..} <- get
 
+  -- before update, what is above of robot?
   bup <- readPos llBoard $ llPos + Pos 0 1
 
-  -- lambda complete!
-  when (llLambdas == llTotalLambdas) $ do
-    wlog llLiftPos 'O'
+  let growing = llStep `mod` llGrowth == llGrowth - 1
 
-  newRocks <- forM llRockPos $ \p -> do
+  cands <-
+    if not growing then return llRockPos
+    else sortp . (llRockPos ++) . map fst <$> searchBoard (=='W')
+
+  newRocks <- forM cands $ \p -> do
     -- la [ca] ra
     -- lb  cb  rb
     let pla = p + Pos (-1) 0
@@ -338,14 +376,30 @@ update wlog = do
             wlog pca ' '
             wlog prb '*'
             return prb
+        | ca == 'W' -> do
+            forM_ adjacent $ \((pca+) -> pw) -> do
+              cell <- readPos llBoard pw
+              when (cell == ' ') $ wlog pw 'W'
+            return pca
       _ ->
         return pca
 
-  llStepL += 1
-  -- rocks must be sorted
-  llRockPosL ~= sortBy (comparing $ \(Pos x y) -> (y, x)) newRocks
+  -- lambda complete!
+  when (llLambdas == llTotalLambdas) $ do
+    wlog llLiftPos 'O'
 
-  when (bup /= '*' && any (== llPos + Pos 0 1) newRocks) $ do
+  -- before check some kind of thins, do commit
+  commit
+
+  -- sanitize rocks' pos
+  newRocks' <-
+    filterM (\p -> (=='*') <$> readPos llBoard p) newRocks
+
+  -- rocks must be sorted
+  llRockPosL ~= sortp newRocks'
+
+  cup <- readPos llBoard $ llPos + Pos 0 1
+  when (bup /= '*' && cup == '*') $ do
     -- Totuzen no DEATH!!
     void $ llResultL ~= Dead
 
@@ -356,6 +410,11 @@ update wlog = do
   llWaterStepL ~= ws
   when (ws > Flood.waterproof llFlood) $ do
     void $ llResultL ~= Dead
+
+  -- finally, incr step
+  llStepL += 1
+
+  return ()
 
 -- patch utils
 
@@ -368,6 +427,7 @@ stash mv = do
         , pPrevLambdas = llLambdas
         , pPrevRocks = llRockPos
         , pPrevWater = llWaterStep
+        , pPrevRazors = llRazors
         , pBoardDiff = []
         }
   void $ llPatchesL %= (revPatch:)
@@ -392,6 +452,7 @@ unapply st LLPatch {..} = do
     , llLiftPos = llLiftPos st
     , llFlood = llFlood st
     , llTramp = llTramp st
+    , llGrowth = llGrowth st
 
     , llResult = llResult st
     , llStep = llStep st - 1
@@ -399,6 +460,7 @@ unapply st LLPatch {..} = do
     , llLambdas = pPrevLambdas
     , llRockPos = pPrevRocks
     , llWaterStep = pPrevWater
+    , llRazors = pPrevRazors
 
     , llBoard = llBoard st
     , llPatches = drop 1 $ llPatches st
@@ -469,3 +531,19 @@ writePos bd p@(Pos x y) v = whenInBoundPos bd p () $ do
   row <- GM.read bd y
   GM.write row x v
 {-# INLINEABLE writePos #-}
+
+searchBoard :: MonadIO m => (Char -> Bool) -> LLT m [(Pos, Char)]
+searchBoard p = do
+  bd <- access llBoardL
+  ior <- liftIO $ newIORef []
+  forPos $ \pos -> liftIO $ do
+    cell <- readPos bd pos
+    when (p cell) $
+      modifyIORef ior ((pos, cell):)
+  liftIO $ readIORef ior
+
+validInputs :: [Char]
+validInputs = "LRUDSWA"
+
+isValidInput :: Char -> Bool
+isValidInput = (`elem` validInputs)

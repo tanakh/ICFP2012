@@ -32,7 +32,7 @@ blackhole mv = forever $ do
 fileProvider :: FilePath -> Provider
 fileProvider fn mvAns mvState = do
   forkIO $ blackhole mvState
-  mvs <- filter (`elem` "LRUDWA") <$> readFile fn
+  mvs <- filter isValidInput <$> readFile fn
   mapM_ (putMVar mvAns) $ map Ans.Cont mvs
   putMVar mvAns Ans.End
 
@@ -52,6 +52,7 @@ kbdProvider mvAns mvState = forever $ do
       | str == "."           = [Ans.Cont 'W']
       | str == " "           = [Ans.Cont 'W']
       | str == "q"           = [Ans.Cont 'A']
+      | str == "s"           = [Ans.Cont 'S']
       | str == "u"           = [Ans.Undo]
       | codes == [8]         = [Ans.Undo]
       | codes == [27,91,65]  = [Ans.Cont 'U']

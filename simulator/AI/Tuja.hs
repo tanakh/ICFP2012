@@ -59,13 +59,8 @@ main = do
   txt <- case Option.input opt of
     Option.Stdin -> getContents
     Option.InputFile fn -> readFile fn
-  let (txtB,txtM) = span (/="") $ lines txt
-      bd0 = reverse txtB
-      w = maximum $ map length bd0
-      bd = map (take w . (++ repeat ' ')) bd0
-      fld = Flood.readFlood $ drop 1 txtM
   case Option.mode opt of
-    Option.Ninja -> ninjaMain opt startTime  fld bd
+    Option.Ninja -> ninjaMain opt startTime txt
     Option.Survey -> do  
       res0 <- initResource
       recipe <- randomRecipe
@@ -73,7 +68,7 @@ main = do
       let res 
             | Option.verbose opt = res0{submitter = printe}
             | otherwise          = res0
-      (Tejun sco res rep) <- runLLT fld bd $ simpleSolver res config
+      (Tejun sco res rep) <- runLLT txt $ simpleSolver res config
       let fnInput = case Option.input opt of
             Option.InputFile fp -> fp
             Option.Stdin -> "STDIN"  
@@ -82,7 +77,7 @@ main = do
                 (sco)
                 (take 6 $ show $ md5 $ L.pack rep)
                 (take 6 $ show $ md5 $ L.pack $ show config)) 
-      hPutStrLn stderr fnRec
+      when (Option.verbose opt) $ hPutStrLn stderr fnRec
       liftIO $ system "mkdir -p record/"
       liftIO $ writeFile fnRec $
         unlines $
@@ -92,16 +87,16 @@ main = do
            rep
           ]
 
-ninjaMain :: Option.Option -> Int -> Flood.Flood -> [String] -> IO ()
-ninjaMain opt startTime fld bd = do
+ninjaMain :: Option.Option -> Int -> String -> IO ()
+ninjaMain opt startTime txt = do
   submitQ <- newTQueueIO 
   bestTejun <- newTVarIO $ Tejun 0 Abort "A"
   population <- newTVarIO $ 0
-  forkIO $ launcher population submitQ fld bd
+  forkIO $ launcher population submitQ txt
   forkIO $ collector opt submitQ bestTejun
   waitOhagi opt startTime bestTejun
 
-launcher population submitQ fld bd = forever $ do
+launcher population submitQ txt = forever $ do
   pop <- atomically $ readTVar population
   when (pop < 30) $ do
     res0 <- initResource
@@ -109,7 +104,7 @@ launcher population submitQ fld bd = forever $ do
     config <- randomConfig theRecipe
     forkIO $ do
       atomically $ modifyTVar population (1+)
-      runLLT fld bd $ simpleSolver res config
+      runLLT txt $ simpleSolver res config
       atomically $ modifyTVar population (1-)
     return ()
   when (pop > 10) $ usleep 1000

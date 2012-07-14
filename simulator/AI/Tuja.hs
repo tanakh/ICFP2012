@@ -117,10 +117,11 @@ randomMany num m = do
 
 data Resource = 
   Resource {
-    dijkstraMaps :: IORef (Map.Map String (Field Double))
+    dijkstraMaps :: IORef (Map.Map String (Field Double)),
+    submitter :: (Result, String) -> IO ()
            }
 initResource :: IO Resource
-initResource = Resource <$> newIORef (Map.empty)
+initResource = Resource <$> newIORef (Map.empty) <*> pure printe
 
 
 main :: IO ()
@@ -221,7 +222,10 @@ simpleSolver resource config = do
   when (lam1 /= lam0) $ do
     sco <- abortScore
     rep <- reverse <$> access llReplayL
-    printe (Abort sco, rep)
+    liftIO $ submitter resource (Abort sco, rep)
   case res of
     Cont -> simpleSolver resource config
-    _        -> return res
+    _        -> do
+      rep <- reverse <$> access llReplayL
+      liftIO $ submitter resource (res, rep)    
+      return res

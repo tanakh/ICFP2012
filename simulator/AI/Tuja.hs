@@ -151,7 +151,7 @@ simpleSolver resource config = do
   bd <- access llBoardL
   validHands <- ('A':)<$> filterM isEffectiveMove "LRUDSW"  
   let biasScore 'A' = -1e99
-      biasScore 'S' = +1e99
+      biasScore 'S' =  1e99
       biasScore _   = 0
   -- dono te ga tsuyoinoka; watashi kininarimasu! 
   hyokaRef <- liftIO $ newIORef $ 

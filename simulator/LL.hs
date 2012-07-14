@@ -1,4 +1,4 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses, UndecidableInstances #-}
 {-# LANGUAGE TemplateHaskell #-}
 
@@ -8,6 +8,7 @@ import Control.Applicative
 import Control.Concurrent
 import Control.Exception
 import Control.Monad
+import Control.Monad.Error
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Loop
 import qualified Data.ByteString.Lazy.Char8 as L
@@ -201,44 +202,18 @@ simulateStep mv = do
   llHistL %= (stat:)
   llReplayL %= (mv:)
 
-  let move dx dy = do
-        let (nx, ny) = (cx + dx, cy + dy)
-        if nx >= 0 && nx < w && ny >= 0 && ny < h
-          then do
-            c <- readCell bd nx ny
-            if c `elem` " .O\\"
-              then do
-                writeCell bd cx cy ' '
-                writeCell bd nx ny 'R'
-                when (c == 'O') $
-                  exitWith $ Win $ lms * 75 - step
-                return (lms + if c == '\\' then 1 else 0, nx, ny)
-              else do
-                let (n2x,n2y) = (nx + dx, ny + dy)
-                if dy == 0 && c == '*' && n2x >= 0 && n2x < w
-                  then do
-                    c2 <- readCell bd n2x n2y
-                    if c2 == ' '
-                      then do
-                        writeCell bd cx cy ' '
-                        writeCell bd nx ny 'R'
-                        writeCell bd n2x n2y '*'
-                        return (lms, nx, ny)
-                      else
-                        return (lms, cx, cy)
-                  else
-                    return (lms, cx, cy)
-          else do
-            return (lms, cx, cy)
-
   once $ do
-    (lms, nx, ny) <- case mv of
-      'L' -> move (-1) 0
-      'R' -> move 1    0
-      'U' -> move 0    1
-      'D' -> move 0    (-1)
-      'W' -> return (lms, cx, cy)
-      'A' -> return (lms, cx, cy)
+    cont <- case mv of
+      'L' -> lift $ move (-1) 0
+      'R' -> lift $ move 1    0
+      'U' -> lift $ move 0    1
+      'D' -> lift $ move 0    (-1)
+      'W' -> return Cont
+      'A' -> return Cont -- abort process is below
+
+    case cont of
+      Cont -> return ()
+      _ -> exitWith cont
 
     -- upadte
     nbd <- liftIO $ VM.replicateM h $ UM.replicate w ' '
@@ -284,6 +259,7 @@ simulateStep mv = do
     when (mv == 'A') $ do
       exitWith $ Abort $ lms * 50 - step
 
+    Pos nx ny <- lift $ access llPosL
     a <- readCell bd  nx (ny + 1)
     b <- readCell nbd nx (ny + 1)
     when (a /= '*' && b == '*') $ do -- DEATH!!
@@ -292,8 +268,37 @@ simulateStep mv = do
     lift $ do
       llStepL += 1
       llLambdasL ~= lms
-      llPosL ~= Pos nx ny
       return Cont
+
+move :: (MonadIO m, Functor m) => Int -> Int -> LLT m Result
+move dx dy = do
+  Pos cx cy <- access llPosL
+  bd <- access llBoardL
+  (w, h) <- getSize
+  step <- access llStepL
+  lms  <- access llLambdasL
+  let (nx, ny) = (cx + dx, cy + dy)
+
+  once $ do
+    when (nx >= 0 && nx < w && ny >= 0 && ny < h) $ do
+      c <- readCell bd nx ny
+      if c `elem` " .O\\"
+        then do
+        writeCell bd cx cy ' '
+        writeCell bd nx ny 'R'
+        when (c == 'O') $ exitWith $ Win $ lms * 75 - step
+        when (c == '\\') $ lift $ void $ llLambdasL += 1
+        lift $ void $ llPosL ~= Pos nx ny
+        else do
+        let (n2x, n2y) = (nx + dx, ny + dy)
+        when (dy == 0 && c == '*' && n2x >= 0 && n2x < w) $ do
+          c2 <- readCell bd n2x n2y
+          when (c2 == ' ') $ do
+            writeCell bd cx cy ' '
+            writeCell bd nx ny 'R'
+            writeCell bd n2x n2y '*'
+            lift $ void $ llPosL ~= Pos nx ny
+    exitWith Cont
 
 getSize :: (MonadIO m) => LLT m (Int, Int)
 getSize = do

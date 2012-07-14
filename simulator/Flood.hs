@@ -8,8 +8,8 @@ data Flood = Flood { water :: Int, flooding :: Int, waterproof :: Int }
 
 defaultFlood = Flood 0 0 10
 
-waterLevel :: Flood -> Int -> Int
-waterLevel fld step =   -- step is 1-origin
+waterLevel :: Int -> Flood -> Int
+waterLevel step fld =   -- step is 1-origin
   if flooding fld == 0
      then water fld
      else water fld + (step-1) `div` flooding fld

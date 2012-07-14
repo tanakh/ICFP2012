@@ -125,17 +125,25 @@ showStatus = do
     (lms * 75 - step)
     (lms * 50 - step)
     (lms * 25 - step)
+
+  fld <- access llFloodL
+  ws <- access llWaterStepL
+  liftIO $ printf "water: %02d/%02d\n"
+    ws (Flood.waterproof fld)
   showBoard
 
 showBoard :: MonadIO m => LLT m ()
 showBoard = do
   bd <- access llBoardL
+  step <- access llStepL
+  fld <- access llFloodL
+  let wl = Flood.waterLevel step fld
   (w, h) <- getSize
   liftIO $ do
     forM_ [h-1, h-2 .. 0] $ \y -> do
       forM_ [0..w-1] $ \x -> do
         putChar =<< readCell bd x y
-      putStrLn ""
+      putStrLn $ if y < wl then "~~~~" else "    "
 
 type Solver m = LLT m Ans.Ans
 
@@ -268,7 +276,7 @@ simulateStep mv = do
     when (a /= '*' && b == '*') $ do -- DEATH!!
       exitWith $ Dead $ lms * 25 - step
 
-    let wl = Flood.waterLevel fld step
+    let wl = Flood.waterLevel step fld
     ws0 <- lift $ access llWaterStepL
     let ws = if ny < wl  -- in the water
                 then ws0 + 1

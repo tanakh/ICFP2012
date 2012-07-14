@@ -117,7 +117,7 @@ randomMany num m = do
 
 
 
-data Tejun = Tejun Int Result String
+data Tejun = Tejun Int Result String deriving (Eq,Ord,Show,Read)
 
 data Resource = 
   Resource {
@@ -145,9 +145,11 @@ main = do
   case Option.mode opt of
     Option.Ninja -> ninjaMain opt startTime  fld bd
     Option.Survey -> do  
-      res <- initResource
+      res0 <- initResource
       config <- randomConfig  
-
+      let res 
+            | Option.verbose opt = res0{submitter = printe}
+            | otherwise          = res0
       (Tejun sco res rep) <- runLLT fld bd $ simpleSolver res config
       let fnInput = case Option.input opt of
             Option.InputFile fp -> fp

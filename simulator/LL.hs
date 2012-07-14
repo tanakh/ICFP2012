@@ -8,7 +8,7 @@ import Control.Applicative
 import Control.Concurrent
 import Control.Exception
 import Control.Monad
-import Control.Monad.State
+import Control.Monad.State.Strict
 import Control.Monad.Trans.Loop
 import Data.IORef
 import Data.Lens
@@ -34,6 +34,7 @@ data LLState
     , llTotalLambdas :: Int
     , llPos          :: Pos
     , llBoard        :: Board
+    , llHist         :: [LLState]
     }
 nameMakeLens ''LLState $ \name -> Just (name ++ "L")
 
@@ -85,6 +86,7 @@ runLLT bdl m = do
         , llTotalLambdas = lambdaNum
         , llPos = Pos cx cy
         , llBoard = bd
+        , llHist = []
         }
   evalStateT (unLLT m) initState
 
@@ -129,13 +131,12 @@ simulate opt bd mVarAns = do
   runLLT bd $ do
     res <- once $ do
       repeatLoopT $ do
-        when (Opt.verbose opt) $ lift . lift $ showStatus
+        when (Opt.verbose opt) $ ll showStatus
         ans <- liftIO $ takeMVar mVarAns
-        let mv = case ans of
-              Ans.End -> 'A'
-              Ans.Cont ch -> ch
-        res <- lift . lift $ simulateStep mv
-
+        res <- case ans of
+          Ans.End -> ll $ simulateStep 'A'
+          Ans.Undo -> ll undo >> continue
+          Ans.Cont ch -> ll $ simulateStep ch
         case res of
           Cont -> continue
           _ -> lift $ exitWith res
@@ -150,6 +151,16 @@ simulate opt bd mVarAns = do
       showStatus
     return res
 
+undo :: MonadIO m => LLT m ()
+undo = do
+  hist <- access llHistL
+  case hist of
+    [] -> do
+      liftIO $ putStrLn "cannot undo"
+    (top:_) -> do
+      llHistL %= tail
+      put top
+
 simulateStep :: (Functor m, Monad m, MonadIO m) => Char -> LLT m Result
 simulateStep mv = do
   step <- access llStepL
@@ -160,6 +171,9 @@ simulateStep mv = do
 
   let h = GM.length bd
   w <- liftIO $ GM.length <$> GM.read bd 0
+
+  stat <- backupState
+  llHistL %= (stat:)
 
   let move dx dy = do
           let (nx, ny) = (cx + dx, cy + dy)
@@ -226,18 +240,16 @@ simulateStep mv = do
               liftIO $ writeCell nbd (x + 1) (y - 1) '*'
               liftIO $ writeCell nbd x y ' '
               continue
+    lift $ llBoardL ~= nbd
+
+    when (mv == 'A') $ do
+      exitWith $ Abort $ lms * 50 - step
 
     a <- liftIO $ readCell bd  nx (ny + 1)
     b <- liftIO $ readCell nbd nx (ny + 1)
     when (a /= '*' && b == '*') $ do -- DEATH!!
-      liftIO $ GM.move bd nbd
       exitWith $ Dead $ lms * 25 - step
 
-    when (mv == 'A') $ do
-      liftIO $ GM.move bd nbd
-      exitWith $ Abort $ lms * 50 - step
-
-    liftIO $ GM.move bd nbd
     lift $ do
       llStepL += 1
       llLambdasL ~= lms
@@ -251,3 +263,5 @@ readCell bd x y = do
 writeCell bd x y v = do
   row <- GM.read bd y
   GM.write row x v
+
+ll = lift . lift

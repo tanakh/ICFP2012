@@ -176,7 +176,7 @@ ninjaMain opt startTime fld bd = do
   bestTejun <- newTVarIO $ Tejun 0 Abort "A"
   population <- newTVarIO $ 0
   forkIO $ launcher population submitQ fld bd
-  forkIO $ collector submitQ bestTejun
+  forkIO $ collector opt submitQ bestTejun
   waitOhagi opt startTime bestTejun
 
 launcher population submitQ fld bd = forever $ do
@@ -192,12 +192,13 @@ launcher population submitQ fld bd = forever $ do
     return ()
   when (pop > 10) $ usleep 1000
   
-collector submitQ bestTejun = forever $do
+collector opt submitQ bestTejun = forever $do
   tejun <- atomically $ readTQueue submitQ
-  hPutStrLn stderr $ "receive " ++ show tejun
   atomically $ modifyTVar bestTejun (max tejun)
   best <- atomically $ readTVar bestTejun
-  hPutStrLn stderr $ "my best " ++ show best
+  when (Option.verbose opt) $ do
+    hPutStrLn stderr $ "receive " ++ show tejun
+    hPutStrLn stderr $ "my best " ++ show best
   
 waitOhagi opt startTime bestTejun = do
   t <- getCurrentTime

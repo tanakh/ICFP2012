@@ -29,6 +29,7 @@ import           AI.Common
 import           AI.GorinNoSho
 import qualified Ans as Ans
 import           DefaultMain
+import qualified Flood
 import           LL
 import qualified Option as Opt
 import           Pos
@@ -62,30 +63,6 @@ data Config =
          Wave -- direction
         )]
   } deriving (Eq, Show, Read)
-
-main :: IO ()
-main = do
-  smellRef <- newIORef Nothing
-  config <- randomConfig
-  res <- defaultMainRes $ simpleSolver smellRef $ config
-  opt <- Opt.parseIO  
-  let fnInput = case Opt.input opt of
-        Opt.InputFile fp -> fp
-        Opt.Stdin -> "STDIN"
-
-  let fnRec = (printf "record/%s-%d-%s.txt"
-            (dropExtension $ takeFileName fnInput)
-            (scoreResult res)
-            (take 6 $ show $ md5 $ L.pack $ show config)) 
-  hPutStrLn stderr fnRec
-  liftIO $ system "mkdir -p record/"
-  liftIO $ writeFile fnRec $
-    unlines $
-      [show $ scoreResult res,
-       show $ res,
-       show $ config
-      ]
-
 
 randomConfig :: IO Config
 randomConfig = 
@@ -139,11 +116,48 @@ randomMany num m = do
 
 
 
+main :: IO ()
+main = do
+  opt <- Opt.parseIO  
+  txt <- case Opt.input opt of
+    Opt.Stdin -> getContents
+    Opt.InputFile fn -> readFile fn
+  let (txtB,txtM) = span (/="") $ lines txt
+      bd0 = reverse txtB
+      w = maximum $ map length bd0
+      bd = map (take w . (++ repeat ' ')) bd0
+      fld = Flood.readFlood $ drop 1 txtM
+  smellRef <- newIORef Nothing
+  config <- randomConfig  
+  
+  res <- runLLT fld bd $ simpleSolver smellRef config
+  
+  let fnInput = case Opt.input opt of
+        Opt.InputFile fp -> fp
+        Opt.Stdin -> "STDIN"
+
+  let fnRec = (printf "record/%s-%d-%s.txt"
+            (dropExtension $ takeFileName fnInput)
+            (scoreResult res)
+            (take 6 $ show $ md5 $ L.pack $ show config)) 
+  hPutStrLn stderr fnRec
+  liftIO $ system "mkdir -p record/"
+  liftIO $ writeFile fnRec $
+    unlines $
+      [show $ scoreResult res,
+       show $ res,
+       show $ config
+      ]
+
+
+
+
 isEffectiveMove :: (MonadIO m) => Char -> LLT m Bool
 isEffectiveMove hand = return True
 
-simpleSolver :: IORef (Maybe (Field Double)) -> Config -> Solver IO
-simpleSolver smellRef config = safetynet $ do
+simpleSolver :: (Functor m, MonadIO m) => IORef (Maybe (Field Double)) -> Config 
+                -> LLT m Result
+simpleSolver smellRef config = do
   -- setup initial valmap, dijkstra field
   bd <- access llBoardL
   validHands <- filterM isEffectiveMove "LRUD"  
@@ -184,10 +198,15 @@ simpleSolver smellRef config = safetynet $ do
       addHyoka hand $ (sinh . toAmp time) wave * smellAt
 
   hyokaMap <- liftIO $ readIORef hyokaRef
-  if step > 1000
-     then return $ Ans.Cont 'A'
-     else return $ Ans.Cont $ 
-       snd $ last $ sort $  
-       map (\(hand,val) -> (val,hand)) $
-       Map.toList $ hyokaMap
+  let ansHand = 
+        if step > 1000
+        then 'A'
+        else 
+          snd $ last $ sort $  
+          map (\(hand,val) -> (val,hand)) $
+          Map.toList $ hyokaMap
 
+  res <- simulateStep ansHand
+  case res of
+    Cont -> simpleSolver smellRef config
+    _        -> return res

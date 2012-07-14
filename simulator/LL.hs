@@ -131,7 +131,7 @@ runLLT txt m = do
   -- other info
   let rpos      = snd . head $ finds (=='R')
       lpos      = snd . head $ finds (=='L')
-      lambdaNum = length $ finds (=='\\')
+      lambdaNum = length $ finds (`elem` "\\@")
       rocks     = map snd $ finds isRock
 
   bd <- liftIO $ V.thaw . V.fromList =<< mapM (U.thaw . U.fromList) bdl
@@ -420,7 +420,8 @@ update wlog commit = do
     void $ llResultL ~= Dead
 
   let wl = Flood.waterLevel llStep llFlood
-      ws | llPos < Pos wl minBound = llWaterStep + 1
+      Pos _ py = llPos
+      ws | py < wl = llWaterStep + 1
          | otherwise = 0
 
   llWaterStepL ~= ws

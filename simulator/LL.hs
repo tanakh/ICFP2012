@@ -141,12 +141,13 @@ simulate opt bd mVarAns = do
           _ -> lift $ exitWith res
       exitWith Cont
 
-    case res of
-      Win   sc -> liftIO $ printf "You Win: %d\n" sc
-      Abort sc -> liftIO $ printf "Aborted: %d\n" sc
-      Dead  sc -> liftIO $ printf "You Died: %d\n" sc
-      Cont     -> liftIO $ printf "Not enough input\n"
-    showStatus
+    when (Opt.verbose opt) $ do
+      case res of
+        Win   sc -> liftIO $ printf "You Win: %d\n" sc
+        Abort sc -> liftIO $ printf "Aborted: %d\n" sc
+        Dead  sc -> liftIO $ printf "You Died: %d\n" sc
+        Cont     -> liftIO $ printf "Not enough input\n"
+      showStatus
     return res
 
 simulateStep :: (Functor m, Monad m, MonadIO m) => Char -> LLT m Result
@@ -237,7 +238,6 @@ simulateStep mv = do
       exitWith $ Abort $ lms * 50 - step
 
     liftIO $ GM.move bd nbd
-
     lift $ do
       llStepL += 1
       llLambdasL ~= lms

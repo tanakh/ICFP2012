@@ -125,7 +125,7 @@ dijkstra field sourceStr passableStr initVal = do
   bd <- access llBoardL
   probes <- liftIO $ newIORef $ Q.empty
   forPos $ \ r -> do
-    a <- readPos bd r
+    a <- normalize <$> readPos bd r
     case a of
       _ | a `elem` sourceStr   -> do
            liftIO $ modifyIORef probes $ Q.insert (initVal, r)
@@ -144,3 +144,8 @@ dijkstra field sourceStr passableStr initVal = do
         forM_ newVals $ \ _ -> do
           liftIO $ modifyIORef probes $ Q.insert (terrainSucc val, nr)
   return field
+    where
+      normalize c
+        | c `elem` "123456789" = '1'
+        | c `elem` "ABCDEFGHI" = 'A'
+        | True                 = c

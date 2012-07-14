@@ -10,7 +10,7 @@ import qualified Ans as Ans
 
 main :: IO ()
 main = do
-  opt <- Opt.parseIO 
+  opt <- Opt.parseIO
   txt <- case Opt.input opt of
     Opt.Stdin -> getContents
     Opt.InputFile fn -> readFile fn
@@ -26,7 +26,6 @@ main = do
       hSetBuffering stdin NoBuffering
       hSetEcho stdin False
       return $ kbdProvider ansMVar
-  let 
   forkIO $ provider
   print =<< simulate opt bd ansMVar
 
@@ -36,10 +35,10 @@ fileProvider fn mvar = do
   mapM_ (putMVar mvar) $ map Ans.Cont mvs
   putMVar mvar Ans.End
 
-autoProvider :: MVar Ans.Ans -> IO ()  
-autoProvider mv = putMVar mv Ans.End                
+autoProvider :: MVar Ans.Ans -> IO ()
+autoProvider mv = putMVar mv Ans.End
 
-kbdProvider :: MVar Ans.Ans -> IO ()  
+kbdProvider :: MVar Ans.Ans -> IO ()
 kbdProvider mv = forever $ do
   c <- getChar
   let cmd = case c of
@@ -52,4 +51,3 @@ kbdProvider mv = forever $ do
         _   -> []
   forM_ cmd $ \c ->
     putMVar mv (Ans.Cont c)
-

@@ -19,6 +19,7 @@ import qualified Data.Vector.Storable as U
 import qualified Data.Vector.Storable.Mutable as UM
 import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Generic.Mutable as GM
+import Text.Printf
 
 import qualified Ans as Ans
 import qualified Option as Opt
@@ -28,11 +29,11 @@ type Board = VM.IOVector (UM.IOVector Char)
 
 data LLState
   = LLState
-    { llStep :: Int
-    , llLambdas :: Int
+    { llStep         :: Int
+    , llLambdas      :: Int
     , llTotalLambdas :: Int
-    , llPos :: Pos
-    , llBoard :: Board
+    , llPos          :: Pos
+    , llBoard        :: Board
     }
 nameMakeLens ''LLState $ \name -> Just (name ++ "L")
 
@@ -100,14 +101,34 @@ scoreResult (Abort n) = n
 scoreResult (Dead n) = n
 scoreResult _ = assert False undefined
 
+showStatus :: MonadIO m => LLT m ()
+showStatus = do
+  step <- access llStepL
+  lms <- access llLambdasL
+  lambdaNum <- access llTotalLambdasL
+  liftIO $ printf "step: %d, lambdas: %03d/%03d, score: %d/%d/%d\n"
+    step lms lambdaNum
+    (lms * 75 - step)
+    (lms * 50 - step)
+    (lms * 25 - step)
+  showBoard
+
+showBoard :: MonadIO m => LLT m ()
+showBoard = do
+  bd <- access llBoardL
+  liftIO $ do
+    let h = GM.length bd
+    w <- GM.length <$> GM.read bd 0
+    forM_ [h-1, h-2 .. 0] $ \y -> do
+      forM_ [0..w-1] $ \x -> do
+        putChar =<< readCell bd x y
+      putStrLn ""
+
 simulate :: Opt.Option -> [String] -> MVar Ans.Ans -> IO Result
 simulate opt bd mVarAns = do
   runLLT bd $ once $ do
-    while (return True) $ do
-      when (Opt.verbose opt) $ do
-        lift . lift $ do
-          bd <- access llBoardL
-          liftIO $ showBoard bd
+    repeatLoopT $ do
+      when (Opt.verbose opt) $ lift . lift $ showStatus
       ans <- liftIO $ takeMVar mVarAns
       let mv = case ans of
             Ans.End -> 'A'
@@ -140,7 +161,7 @@ simulateStep mv = do
               liftIO $ writeCell bd cx cy ' '
               liftIO $ writeCell bd nx ny 'R'
               when (c == 'O') $
-                exitWith $ Win $ lms * 75 - (step + 1)
+                exitWith $ Win $ lms * 75 - step
               return (lms + if c == '\\' then 1 else 0, nx, ny)
               else do
               return (lms, cx, cy)
@@ -155,8 +176,6 @@ simulateStep mv = do
       'D' -> move 0    (-1)
       'W' -> return (lms, cx, cy)
       'A' -> return (lms, cx, cy)
-
-    liftIO $ print (lms, lambdaNum, nx, ny)
 
     -- upadte
     nbd <- liftIO $ VM.replicateM h $ UM.replicate w ' '
@@ -198,15 +217,15 @@ simulateStep mv = do
               liftIO $ writeCell nbd x y ' '
               continue
 
-    a <- liftIO $ readCell bd (ny + 1) nx
-    b <- liftIO $ readCell nbd (ny + 1) nx
+    a <- liftIO $ readCell bd  nx (ny + 1)
+    b <- liftIO $ readCell nbd nx (ny + 1)
     when (a /= '*' && b == '*') $ do -- DEATH!!
       liftIO $ putStrLn "You Died"
-      exitWith $ Dead $ lms * 25 - (step + 1)
+      exitWith $ Dead $ lms * 25 - step
 
     when (mv == 'A') $ do
       liftIO $ putStrLn "Aborted"
-      exitWith $ Abort $ lms * 50 - (step + 1)
+      exitWith $ Abort $ lms * 50 - step
 
     liftIO $ GM.move bd nbd
 
@@ -223,11 +242,3 @@ readCell bd x y = do
 writeCell bd x y v = do
   row <- GM.read bd y
   GM.write row x v
-
-showBoard bd = do
-  let h = GM.length bd
-  w <- GM.length <$> GM.read bd 0
-  forM_ [h-1, h-2 .. 0] $ \y -> do
-    forM_ [0..w-1] $ \x -> do
-      putChar =<< readCell bd x y
-    putStrLn ""

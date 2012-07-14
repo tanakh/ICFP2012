@@ -26,4 +26,5 @@ executable ll-simulator
                      , optparse-applicative
                      , filepath
                      , pureMD5
+                     , stm
                      , bytestring

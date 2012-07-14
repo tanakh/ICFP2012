@@ -51,11 +51,14 @@ valAfraid (Happy m) = Afraid m
 valAfraid x = x
 
 greedySolver = safetynet $ do
-  _ <- evaluatePlaying True
-  yomi <- sort <$> mapM (\c -> (,c) <$> evaluateHand 3 c) "LRUDA"
-  -- liftIO $ print yomi
-  let (_, cmd) = head yomi
-  return $ Ans.Cont cmd
+  step <- access llStepL
+  if step > 200 then return $ Ans.Cont 'A'
+    else do
+    _ <- evaluatePlaying True
+    yomi <- sort <$> mapM (\c -> (,c) <$> evaluateHand 3 c) "LRUDA"
+    -- liftIO $ print yomi
+    let (_, cmd) = head yomi
+    return $ Ans.Cont cmd
 
 evaluateHand :: (Functor m, MonadIO m) => Int -> Char -> LLT m GrandValue
 evaluateHand depth hand

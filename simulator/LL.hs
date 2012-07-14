@@ -4,7 +4,7 @@
 module LL (
   LLT, runLLT,
   Solver,
-
+  Result,
   simulate,
   simulateStep, undo,
   move, moveC,

@@ -104,13 +104,16 @@ ninjaMain opt startTime txt = do
   forkIO $ collector opt submitQ bestTejun
   waitOhagi opt startTime bestTejun
 
+
 launcher population submitQ learnedConfigs txt = forever $ do
   pop <- atomically $ readTVar population
   when (pop < 30) $ do
     res0 <- initResource
     let res = res0 { submitter = \x -> atomically $ writeTQueue submitQ x}
-    -- config <- randomConfig theRecipe
-    config <- choose learnedConfigs
+    let l2 :: [Config]
+        l2 = learnedConfigs
+    config <- randomConfig theRecipe
+    -- config <- choose learnedConfigs
     forkIO $ do
       atomically $ modifyTVar population (1+)
       runLLT txt $ simpleSolver res config '_'

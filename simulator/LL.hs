@@ -169,7 +169,7 @@ simulate opt bd mVarAns mVarState = do
               Opt.InputFile fp -> fp
               Opt.Stdin -> "STDIN"
         liftIO $ writeFile
-          (printf "%s-%d-%s-replay.txt"
+          (printf "replay-%s-%d-%s.txt"
            (dropExtension $ takeFileName fn)
            (scoreResult res)
            (take 6 $ show $ md5 $ L.pack rep))
@@ -319,4 +319,3 @@ writePos bd (Pos x y) v = do
   GM.write row x v
 
 ll = lift . lift
-

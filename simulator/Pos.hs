@@ -9,6 +9,7 @@ module Pos where
 -- >>> -Pos 4 3
 -- (-4,-3)
 --
+
 data Pos = Pos { px :: Int, py :: Int } deriving (Eq, Ord)
 
 instance Show Pos where

@@ -25,12 +25,24 @@ import           DefaultMain
 
 type Field a = VM.IOVector (VM.IOVector a) 
 
-main :: IO ()
-main = defaultMain simpleSolver
+data Config = 
+  Config 
+  {
+    serachPat :: [(String, String, Double)],
+    oscillator :: [Double]
+  }
 
-simpleSolver :: Solver IO
-simpleSolver = safetynet $ do
-  field <- dijkstra "\\O" " ." (1::Double) 
-  showF show field
-  return $ Ans.Cont 'A'
+main :: IO ()
+main = defaultMain $ simpleSolver $ Config [] []
+
+simpleSolver :: Config -> Solver IO
+simpleSolver config = safetynet $ do
+  smell <- dijkstra "\\O" " ." (1::Double) 
+  updateF smell (\x -> if isPassable x then 1/x else 0)
+  -- showF (wideShow 5) smell
+  roboPos <- access llPosL
+  evals <- forM directions $ \(char, vec) -> do
+    vals <- readFList smell (roboPos + vec)
+    return [(val, char) | val <- vals]
+  return $ Ans.Cont $ snd $ last $ sort $ concat $ evals
 

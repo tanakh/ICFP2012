@@ -12,6 +12,8 @@ directions = [('L', Pos (-1) 0),
               ('R', Pos 1 0),
               ('U', Pos 0 1),
               ('D', Pos 0 (-1)) ]
+directions5 :: [(Char, Pos)]
+directions5 = ('W', Pos 0 0): directions
 
 safetynet :: (MonadIO m) => Solver m -> Solver m
 safetynet m = do

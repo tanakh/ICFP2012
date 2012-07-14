@@ -90,19 +90,30 @@ showF convert bd = do
 class (Eq a, Ord a, Num a) => Terrain a where
   unknown :: a
   blocked :: a
+  isPassable :: a-> Bool
+  isPassable x 
+    | x == unknown = False
+    | x == blocked = False
+    | otherwise    = True
   terrainSucc :: a->a
-  terrainSucc x
-    | x == unknown = x
-    | x == blocked = x
-    | otherwise    = x+1
+  terrainSucc x = if isPassable x then x+1 else x
 
 instance Terrain Int where
   unknown = minBound-2
   blocked = minBound-1
 instance Terrain Double where
-  unknown = 1/8901e35
-  blocked = 1/1341e72
-
+  unknown = 8901e35
+  blocked = 1341e72
+wideShow :: (Terrain a,Show a) =>Int -> a -> String
+wideShow width val 
+  | val == unknown = "?? "
+  | val == blocked = ">< "
+  | otherwise      = take (width-1) (show2 val) ++ " "
+  where
+    show2 = cut . show
+    cut ('0':'.':xs) = '.':xs
+    cut x = x
+    
 dijkstra :: (MonadIO m, Terrain a) => String -> String -> a -> LLT m (Field a)
 dijkstra sourceStr passableStr initVal = do
   bd <- access llBoardL  
@@ -115,7 +126,7 @@ dijkstra sourceStr passableStr initVal = do
       _ | a `elem` sourceStr   -> 
            liftIO $ modifyIORef probes $ Q.insert (initVal, r) 
         | a `elem` passableStr -> return ()
-        | otherwise            -> liftIO $ unsafeWriteFIO field r blocked
+        | otherwise            -> writeF field r blocked
   while (liftIO ((not . Q.null) <$> readIORef probes)) $ do
     (val, r) <- liftIO $ Q.findMin <$> readIORef probes
     liftIO $ modifyIORef probes Q.deleteMin

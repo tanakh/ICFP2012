@@ -68,22 +68,57 @@ main = do
         [(Wave [(5, 0.05, 0),(5,0,3)], Wave [(1, 0.1, 0)])]
       }
 
+randomConfig :: IO Config
+randomConfig = 
+  Config <$> randomSearchAtom <*> randomMany 5 randomWindAtom1
+  
+
 choose :: [a] -> IO a
 choose xs = do
   i <- randomRIO (0,length xs-1)
   return $ xs !! i
         
-randomWaveIO :: IO (Wave)
-randomWaveIO = do
-  a  <- exp <$>  randomRIO (0, 2)
-  f  <- (*) <$> randomRIO (-1, 1) <*> (exp <$> randomRIO (-4, 1))
+normalSearchAtom = 
+    (Wave [(2.302,0,0)], "\\O", " .")
+
+randomSearchAtom :: IO [(Wave, String, String)]
+randomSearchAtom = 
+  (normalSearchAtom :) <$> randomMany 3 randomSearchAtom1
+
+randomSearchAtom1 = do
+  w <- randomWeight
+  src <- choose ["\\O"]
+  pass <- choose [" "," ."," .\\"," .*"]
+  return (w, src, pass)
+
+randomWindAtom1 = do
+  w <- randomWeight
+  f  <- (*) <$> randomRIO (-1, 1) <*> (exp <$> randomRIO (-4, 0))
   p0 <- randomRIO (0, 2*pi)
-  let cpnt1 =  (a,f,p0)
+  return (w, Wave [(1,f,p0)])
+
+randomWeight :: IO Wave
+randomWeight = Wave <$> randomMany 5 randomWeight1
+
+randomWeight1 :: IO (Double, Double, Double)
+randomWeight1 = do
+  a  <- randomRIO (0, 1)
+  f  <- (*) <$> randomRIO (-1, 1) <*> (exp <$> randomRIO (-4, 0))
+  p0 <- randomRIO (0, 2*pi)
+  return (a,f,p0)
+
+
+randomMany :: Double -> IO a -> IO [a]
+randomMany num m = do
+  x  <- m
   dice <- randomRIO (0,1)
-  Wave cpnts <- if dice < (0.7::Double)
-                then randomWaveIO
-                else return $ Wave []
-  return $ Wave $ cpnt1: cpnts
+  xs <- if dice > (1/num)
+                then randomMany num m
+                else return []
+  return $ x:xs
+
+
+
 
 isEffectiveMove :: (MonadIO m) => Char -> LLT m Bool
 isEffectiveMove hand = return True
@@ -99,7 +134,7 @@ simpleSolver smellRef config = safetynet $ do
   let addHyoka hand val =
         liftIO $ modifyIORef hyokaRef (Map.update (Just . (val+)) hand)
   roboPos <- access llPosL
-  
+
   maybeSmell <- liftIO $ readIORef smellRef
   smell <- case maybeSmell of
     Just a -> return a

@@ -98,7 +98,7 @@ choose xs = do
   return $ xs !! i
 
 normalSearchAtom = 
-    (Wave [(2.302,0,0)], "\\O", " .")
+    (Wave [(2.302, 0, 0)], "\\O", " .")
 
 randomSearchAtom :: IO [(Wave, String, String)]
 randomSearchAtom = 
@@ -172,7 +172,7 @@ simpleSolver smellRef config = safetynet $ do
     forM_ validHands $ \hand -> do      
       let vec = fromIntegral <$> hand2pos hand
           windVec = toAmp2 time windWave
-          val = (exp . toAmp time) wave * (vec `innerProd` windVec)    
+          val = (sinh . toAmp time) wave * (vec `innerProd` windVec)    
       addHyoka hand val
   -- treat each search
   forM_ (searchAtom config) $ \ (wave, srcStr, passStr) -> do
@@ -181,7 +181,7 @@ simpleSolver smellRef config = safetynet $ do
     -- showF (wideShow 5) smell --debug
     forM_ validHands $ \hand -> do
       smellAt <- unsafeReadF smell (roboPos + hand2pos hand)
-      addHyoka hand $ (exp . toAmp time) wave * smellAt
+      addHyoka hand $ (sinh . toAmp time) wave * smellAt
 
   hyokaMap <- liftIO $ readIORef hyokaRef
   if step > 1000

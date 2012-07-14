@@ -24,6 +24,7 @@ import           LL
 import           Pos
 import           DefaultMain
 
+yomiDepth = 3
 
 main = defaultMain greedySolver
 
@@ -64,8 +65,8 @@ valAfraid x = x
 
 greedySolver = safetynet $ do
   _ <- evaluatePlaying True
-  yomi <- sort <$> mapM (\c -> (,c) <$> evaluateHand 3 c) "LRUDA"
-  -- liftIO $ print yomi
+  yomi <- sort <$> mapM (\c -> (,c) <$> evaluateHand yomiDepth c) "LRUDA"
+  liftIO $ hPutStrLn stderr $ show yomi
   let (_, cmd) = head yomi
   return $ Ans.Cont cmd
 
@@ -183,13 +184,12 @@ evaluatePlaying debugFlag = do
     if (val < Unknown)
        then liftIO $ modifyIORef yesLambdaR  (1+)
        else liftIO $ modifyIORef noLambdaR   (1+)
-  
   yesLambda <- liftIO $ readIORef yesLambdaR
   noLambda <- liftIO $ readIORef noLambdaR
   let liftYes :: Bool 
       liftYes = liftVal < Unknown && noLambda == 0
-      abortScoreHope = abortScore0 + 50 * yesLambda
-      winScoreHope = winScore0 + 75 * yesLambda
+      abortScoreHope = abortScore0 + 25 * yesLambda
+      winScoreHope = winScore0 + 37 * yesLambda
   case () of
     _ | not liftYes          -> return $ GrandValue abortScoreHope False Danger
       | roboVal   >= Unknown -> return $ GrandValue abortScore0 False Danger

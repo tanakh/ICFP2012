@@ -15,13 +15,16 @@ import Data.Digest.Pure.MD5
 import Data.IORef
 import Data.Lens
 import Data.Lens.Template
+import Data.Ord
 import qualified Data.Vector as V
+import qualified Data.Vector.Algorithms.Intro as Intro
 import qualified Data.Vector.Mutable as VM
 import qualified Data.Vector.Storable as U
 import qualified Data.Vector.Storable.Mutable as UM
 import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Generic.Mutable as GM
 import System.FilePath
+import System.Process
 import System.IO
 import Text.Printf
 
@@ -40,6 +43,7 @@ data LLState
     , llFlood        :: Flood.Flood
     , llPos          :: Pos
     , llLiftPos      :: Pos
+    , llRockPos      :: VM.IOVector Pos
     , llBoard        :: Board
     , llWaterStep    :: Int
     , llHist         :: [LLState]
@@ -57,8 +61,10 @@ backupState :: MonadIO m => LLT m LLState
 backupState = do
   bd <- access llBoardL
   nbd <- liftIO $ V.unsafeThaw =<< V.mapM UM.clone =<< V.unsafeFreeze bd
+  rocks <- access llRockPosL
+  nrocks <- liftIO $ VM.clone rocks
   st <- get
-  return $ st { llBoard = nbd }
+  return $ st { llBoard = nbd, llRockPos = nrocks}
 
 withBackup :: MonadIO m => LLT m a -> LLT m a
 withBackup m = do
@@ -80,11 +86,12 @@ runLLT fld bdl m = do
       when (c == 'R') $ lift $ exitWith (x, y)
       return $ x+1
     return $ y+1
+
   (cxLift, cyLift) <- iterateLoopT 0 $ \y -> do
     iterateLoopT 0 $ \x -> do
       when (x >= w) exit
       c <- readCell bd x y
-      when (c == 'R') $ lift $ exitWith (x, y)
+      when (c == 'L') $ lift $ exitWith (x, y)
       return $ x+1
     return $ y+1
 
@@ -96,12 +103,22 @@ runLLT fld bdl m = do
         when (c == '\\') $ modifyIORef ior (+1)
     readIORef ior
 
+  rocks <- liftIO $ do
+    rr <- newIORef []
+    forM_ [0..h-1] $ \y -> do
+      forM_ [0..w-1] $ \x -> do
+        c <- readCell bd x y
+        when (c == '*') $ modifyIORef rr (Pos x y:)
+    reverse <$> readIORef rr
+  vrocks <- liftIO $ V.thaw $ V.fromList rocks
+
   let initState = LLState
         { llStep = 0
         , llLambdas = 0
         , llTotalLambdas = lambdaNum
         , llPos = Pos cx cy
         , llLiftPos = Pos cxLift cyLift
+        , llRockPos = vrocks
         , llBoard = bd
         , llFlood = fld
         , llWaterStep = 0
@@ -209,8 +226,9 @@ simulate opt fld bd solver = do
         let fn = case Opt.input opt of
               Opt.InputFile fp -> fp
               Opt.Stdin -> "STDIN"
+        liftIO $ system "mkdir -p replay/"              
         liftIO $ writeFile
-          (printf "replay-%s-%d-%s.txt"
+          (printf "replay/%s-%d-%s.txt"
            (dropExtension $ takeFileName fn)
            (scoreResult res)
            (take 6 $ show $ md5 $ L.pack rep))
@@ -257,10 +275,20 @@ simulateStep' cont = do
       Abort _ -> return () -- abort process is below
       _ -> exitWith cont
 
+    cp@(Pos nx ny) <- lift $ access llPosL
+    bup <- readPos bd $ cp + Pos 0 1
+
     -- update
-    nbd <- liftIO $ VM.replicateM h $ UM.replicate w ' '
-    lift $ forPos $ \p -> do
-      writePos nbd p =<< readPos bd p
+
+    when (lms == lambdaNum) $ do
+      lpos <- lift $ access llLiftPosL
+      lc <- readPos bd lpos
+      when (lc == 'L') $ do
+        writePos bd lpos 'O'
+
+    rocks <- lift $ access llRockPosL
+    forM_ [0 .. GM.length rocks - 1] $ \ix -> do
+      p <- liftIO $ GM.read rocks ix
 
       c  <- readPos bd $ p + Pos 0 0
       b  <- readPos bd $ p + Pos 0 (-1)
@@ -270,27 +298,30 @@ simulateStep' cont = do
       b0 <- readPos bd $ p + Pos (-1) (-1)
 
       case () of
-        _ | c == 'L' && lms == lambdaNum -> do
-              writePos nbd p 'O'
-          | c == '*' &&
+        _ | c == '*' &&
             b == ' ' -> do
-              writePos nbd p ' '
-              writePos nbd (p + Pos 0 (-1)) '*'
+              writePos bd p ' '
+              writePos bd (p + Pos 0 (-1)) '*'
+              liftIO $ GM.write rocks ix $ p + Pos 0 (-1)
           | c == '*' && c1 == ' ' &&
             b == '*' && b1 == ' ' -> do
-              writePos nbd p ' '
-              writePos nbd (p + Pos 1 (-1)) '*'
+              writePos bd p ' '
+              writePos bd (p + Pos 1 (-1)) '*'
+              liftIO $ GM.write rocks ix $ p + Pos 1 (-1)
           | c0 == ' ' && c == '*' &&
             b0 == ' ' && b == '*' -> do
-              writePos nbd p ' '
-              writePos nbd (p + Pos (-1) (-1)) '*'
+              writePos bd p ' '
+              writePos bd (p + Pos (-1) (-1)) '*'
+              liftIO $ GM.write rocks ix $ p + Pos (-1) (-1)
           | c == '*'  && c1 == ' ' &&
             b == '\\' && b1 == ' ' -> do
-              writePos nbd p ' '
-              writePos nbd (p + Pos 1 (-1)) '*'
+              writePos bd p ' '
+              writePos bd (p + Pos 1 (-1)) '*'
+              liftIO $ GM.write rocks ix $ p + Pos 1 (-1)
         _ -> return ()
 
-    lift $ llBoardL ~= nbd
+    -- invariant
+    liftIO $ Intro.sortBy (comparing $ \(Pos x y) -> (y, x)) rocks
 
     case cont of
       Abort _ -> exitWith $ Abort $ lms * 50 - step
@@ -298,10 +329,8 @@ simulateStep' cont = do
 
     lift $ llStepL += 1  -- increment step if it is not Abort
 
-    Pos nx ny <- lift $ access llPosL
-    a <- readCell bd  nx (ny + 1)
-    b <- readCell nbd nx (ny + 1)
-    when (a /= '*' && b == '*') $ do -- DEATH!!
+    cup <- readPos bd $ cp + Pos 0 1
+    when (bup /= '*' && cup == '*') $ do -- DEATH!!
       exitWith $ Dead $ lms * 25 - (step + 1)
 
     let wl = Flood.waterLevel step fld
@@ -344,6 +373,11 @@ move dx dy = do
         writePos bd p1 'R'
         writePos bd p2 '*'
         llPosL ~= p1
+        rocks <- access llRockPosL
+        forM_ [0..GM.length rocks - 1] $ \ix -> do
+          p <- liftIO $ GM.read rocks ix
+          -- rock moves p1 => p2
+          liftIO $ when (p == p1) $ GM.write rocks ix p2
         return Cont
     _ ->
       return Cont

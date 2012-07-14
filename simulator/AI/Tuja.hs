@@ -19,6 +19,7 @@ import qualified Data.Vector.Storable.Mutable as UM
 import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Generic.Mutable as GM
 import System.IO
+import System.Process
 import System.Posix.Unistd
 import System.Random
 import System.FilePath
@@ -72,8 +73,9 @@ main = do
         Opt.InputFile fp -> fp
         Opt.Stdin -> "STDIN"
 
+  liftIO $ system "mkdir -p record/"
   liftIO $ writeFile
-    (printf "record-%s-%d-%s.txt"
+    (printf "record/%s-%d-%s.txt"
      (dropExtension $ takeFileName fn)
      (scoreResult res)
      (take 6 $ show $ md5 $ L.pack $ show config)) $

@@ -1,6 +1,7 @@
 module DefaultMain(defaultMain) where
 
 import Control.Concurrent
+import Control.Monad
 import System.IO
 
 import           LL
@@ -34,4 +35,5 @@ defaultMain theSolver = do
     Opt.Auto -> do
       return $ theSolver
 
-  print =<< simulate opt fld bd solver
+  when (Opt.verbose opt) $ do
+    print =<< simulate opt fld bd solver

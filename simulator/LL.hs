@@ -172,9 +172,9 @@ simulate opt fld bd solver = do
         Cont     -> liftIO $ printf "Not enough input\n"
       showStatus
 
-    rep <- access llReplayL
+    rep <- reverse <$> access llReplayL
     when (Opt.verbose opt) $ do
-      liftIO $ putStrLn $ reverse rep
+      liftIO $ putStrLn rep
 
     case Opt.replay opt of
       Opt.ReplayNothing -> do
@@ -189,6 +189,9 @@ simulate opt fld bd solver = do
            (scoreResult res)
            (take 6 $ show $ md5 $ L.pack rep))
           rep
+
+    when (Opt.input opt == Opt.Stdin) $ do
+      liftIO $ putStrLn rep
 
     return res
 

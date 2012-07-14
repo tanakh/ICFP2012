@@ -17,10 +17,10 @@ def survey()
     log.each{|logfn|
       cnt += 1 if logfn[0...fnBody.length] == fnBody
     }
-    puts "#{fnBody} #{cnt}   "
+    STDERR.print "#{fnBody} #{cnt}   "
     [fn, cnt]
   }
-  puts "\n"
+  STDERR.print "\n"
   maxcnt = xs0.map{|fn,cnt| cnt}.max
   $launchInfo = xs0.map{|fn,cnt| [fn, (maxcnt-cnt).to_f]}
 end

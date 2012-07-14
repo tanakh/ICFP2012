@@ -224,40 +224,35 @@ simulateStep mv = do
     foreach [0..h-1] $ \y -> do
       foreach [0..w-1] $ \x -> do
         writeCell nbd x y =<< readCell bd x y
-        c <- readCell bd x y
 
-        when (c == 'L' && lms == lambdaNum) $
-          writeCell nbd x y 'O'
-        when (c /= '*') continue
+        c  <- readCell bd x       y
+        b  <- readCell bd x       (y - 1)
+        c1 <- readCell bd (x + 1) y
+        b1 <- readCell bd (x + 1) (y - 1)
+        c0 <- readCell bd (x - 1) y
+        b0 <- readCell bd (x - 1) (y - 1)
 
-        when (y > 0) $ do
-          b <- readCell bd x (y - 1)
-          when (b == ' ') $ do
-            writeCell nbd x (y - 1) '*'
-            writeCell nbd x y ' '
-            continue
-          when (b == '*') $ do
-            when (x + 1 < w) $ do
-              c1 <- readCell bd (x + 1) y
-              b1 <- readCell bd (x + 1) (y - 1)
-              when (c1 == ' ' && b1 == ' ') $ do
+        case () of
+          _ | c == 'L' && lms == lambdaNum -> do
+                writeCell nbd x y 'O'
+            | c == '*' &&
+              b == ' ' -> do
+                writeCell nbd x (y - 1) '*'
+                writeCell nbd x y ' '
+            | c == '*' && c1 == ' ' &&
+              b == '*' && b1 == ' ' -> do
+                writeCell nbd x y ' '
                 writeCell nbd (x + 1) (y - 1) '*'
+            | c0 == ' ' && c == '*' &&
+              b0 == ' ' && b == '*' -> do
                 writeCell nbd x y ' '
-                continue
-            when (x - 1 >= 0) $ do
-              c0 <- readCell bd (x - 1) y
-              b0 <- readCell bd (x - 1) (y - 1)
-              when (c0 == ' ' && b0 == ' ') $ do
                 writeCell nbd (x - 1) (y - 1) '*'
+            | c == '*'  && c1 == ' ' &&
+              b == '\\' && b1 == ' ' -> do
                 writeCell nbd x y ' '
-                continue
-          when (b == '\\' && x + 1 < w) $ do
-            c1 <- readCell bd (x + 1) y
-            b1 <- readCell bd (x + 1) (y - 1)
-            when (c1 == ' ' && b1 == ' ') $ do
-              writeCell nbd (x + 1) (y - 1) '*'
-              writeCell nbd x y ' '
-              continue
+                writeCell nbd (x + 1) (y - 1) '*'
+          _ -> return ()
+
     lift $ llBoardL ~= nbd
 
     when (mv == 'A') $ do

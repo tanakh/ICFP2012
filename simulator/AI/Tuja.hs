@@ -68,7 +68,8 @@ main = do
     Option.Ninja -> ninjaMain opt startTime  fld bd
     Option.Survey -> do  
       res0 <- initResource
-      config <- randomConfig theRecipe
+      recipe <- randomRecipe
+      config <- randomConfig recipe
       let res 
             | Option.verbose opt = res0{submitter = printe}
             | otherwise          = res0

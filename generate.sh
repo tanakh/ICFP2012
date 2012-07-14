@@ -1,21 +1,23 @@
-ID = 96526636
-ARC = "icfp-${ID}"
+#!/bin/bash -ev
+
+ID=96526636
+ARC="icfp-${ID}"
+
+rm -rf ${ARC}
 
 cd simulator
-cabal update
 cabal-dev clean
 cabal-dev install
+cabal-dev sdist
 cd ../
 
 cp -r template ${ARC}
-cp simulator/cabal-dev/bin/$1 lifter
+cp "simulator/cabal-dev/bin/$1" ${ARC}/lifter
 
-cd simulator
-cabal-dev clean
-cd ..
-cp -r simulator ${ARC}/src
+mkdir ${ARC}/src
+cp -r simulator/dist/*.tar.gz ${ARC}/src
 
 cd ${ARC}
-tar -xf "../${ARC}.tgz" install lifter PACKAGES src README
+tar -cvzf "../${ARC}.tgz" install lifter PACKAGES src README
 cd ..
-rm -rf $ARC
+rm -rf ${ARC}

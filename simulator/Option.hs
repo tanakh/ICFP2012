@@ -11,8 +11,7 @@ data Option =
     answer :: Answer,
     replay :: Replay,
     verbose :: Bool,
-    mode :: Mode,
-    commChan :: Maybe Channel
+    mode :: Mode
   }
 
 data Input  = InputFile FilePath | Stdin deriving (Eq, Show)
@@ -60,7 +59,6 @@ parse = Option
           & short 's'
           & transform fm
           & help "Tuja mode 'survey'; (default) ninja")
-        <*> pure Nothing
         
   where
     fa str = case str of

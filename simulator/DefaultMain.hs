@@ -1,4 +1,4 @@
-module DefaultMain(defaultMain) where
+module DefaultMain(defaultMain, defaultMainRes) where
 
 import Control.Concurrent
 import Control.Monad
@@ -9,8 +9,10 @@ import qualified Option as Opt
 import           Provider
 import qualified Flood
 
-defaultMain :: Solver IO -> IO ()
-defaultMain theSolver = do
+defaultMain s = defaultMainRes s >> return ()
+
+defaultMainRes :: Solver IO -> IO Result
+defaultMainRes theSolver = do
   opt <- Opt.parseIO
   txt <- case Opt.input opt of
     Opt.Stdin -> getContents
@@ -37,3 +39,5 @@ defaultMain theSolver = do
 
   res <- simulate opt fld bd solver
   when (Opt.verbose opt) $ print res
+  return res
+  

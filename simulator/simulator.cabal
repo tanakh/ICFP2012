@@ -43,14 +43,6 @@ executable ll-simulator
   main-is:             ../main.hs
   build-depends:       base ==4.5.*
                      , simulator
-executable ll-ai-tuja
-  ghc-options:         -O3
-  hs-source-dirs:      dist
-  main-is:             ../AI/Tuja.hs
-  build-depends:       base ==4.5.*, simulator, mtl
-                       , pqueue,vector, data-lens-fd, mtl, control-monad-loop
-                       , stm, containers, unix, random
-
 
 executable ll-ai-simple
   ghc-options:         -O3
@@ -91,4 +83,14 @@ executable ll-ai-bf
   build-depends:       base ==4.5.*, simulator
                      , vector, data-lens-fd, mtl, control-monad-loop, stm
   buildable:           False
+
+
+
+executable ll-ai-tuja
+  ghc-options:         -O3
+  hs-source-dirs:      dist
+  main-is:             ../AI/Tuja.hs
+  build-depends:       base ==4.5.*, simulator, mtl
+                       , pqueue,vector, data-lens-fd, mtl, control-monad-loop
+                       , stm, containers, unix, random,filepath, bytestring,pureMD5
 

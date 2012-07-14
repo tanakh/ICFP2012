@@ -7,6 +7,8 @@ import Control.Monad.Trans.Loop
 import Control.Monad.Trans
 import Data.Lens
 import Data.List
+import Data.Digest.Pure.MD5
+import qualified Data.ByteString.Lazy.Char8 as L
 import qualified Data.PQueue.Min as Q
 import Data.IORef
 import qualified Data.Map as Map
@@ -19,12 +21,15 @@ import qualified Data.Vector.Generic.Mutable as GM
 import System.IO
 import System.Posix.Unistd
 import System.Random
+import System.FilePath
+import Text.Printf
 
 import           AI.Common
 import           AI.GorinNoSho
 import qualified Ans as Ans
 import           DefaultMain
 import           LL
+import qualified Option as Opt
 import           Pos
 
 newtype Wave = 
@@ -32,12 +37,12 @@ newtype Wave =
   [(Double, -- amplitude
     Double, -- freq
     Double -- initial phase
-    )]
-  
+    )] deriving (Eq, Show, Read)
+
 toAmp :: Double -> Wave -> Double
 toAmp t (Wave xs) = 
   sum $ map (\(a,f,p0) -> a*cos(f*t+p0)) xs
-  
+
 toAmp2 :: Double -> Wave -> Dpos
 toAmp2 t (Wave xs) = 
   sum $ map (\(a,f,p0) -> Pos (a*cos(f*t+p0)) (a*sin(f*t+p0)) ) xs
@@ -55,29 +60,40 @@ data Config =
        [(Wave, -- weight
          Wave -- direction
         )]
-  }
+  } deriving (Eq, Show, Read)
 
 main :: IO ()
 main = do
   smellRef <- newIORef Nothing
-  defaultMain $ simpleSolver smellRef $ 
-    Config {
-      searchAtom =
-        [(Wave [], "\\O", " .")],
-      windAtom = 
-        [(Wave [(5, 0.05, 0),(5,0,3)], Wave [(1, 0.1, 0)])]
-      }
+  config <- randomConfig
+  res <- defaultMainRes $ simpleSolver smellRef $ config
+  opt <- Opt.parseIO  
+  let fn = case Opt.input opt of
+        Opt.InputFile fp -> fp
+        Opt.Stdin -> "STDIN"
+
+  liftIO $ writeFile
+    (printf "record-%s-%d-%s.txt"
+     (dropExtension $ takeFileName fn)
+     (scoreResult res)
+     (take 6 $ show $ md5 $ L.pack $ show config)) $
+    unlines $
+      [show $ scoreResult res,
+       show $ res,
+       show $ config
+      ]
+
 
 randomConfig :: IO Config
 randomConfig = 
   Config <$> randomSearchAtom <*> randomMany 5 randomWindAtom1
-  
+
 
 choose :: [a] -> IO a
 choose xs = do
   i <- randomRIO (0,length xs-1)
   return $ xs !! i
-        
+
 normalSearchAtom = 
     (Wave [(2.302,0,0)], "\\O", " .")
 
@@ -87,7 +103,7 @@ randomSearchAtom =
 
 randomSearchAtom1 = do
   w <- randomWeight
-  src <- choose ["\\O"]
+  src <- choose ["\\O", "*"]
   pass <- choose [" "," ."," .\\"," .*"]
   return (w, src, pass)
 
@@ -165,8 +181,10 @@ simpleSolver smellRef config = safetynet $ do
       addHyoka hand $ (exp . toAmp time) wave * smellAt
 
   hyokaMap <- liftIO $ readIORef hyokaRef
-  return $ Ans.Cont $ 
-    snd $ last $ sort $  
-    map (\(hand,val) -> (val,hand)) $
-    Map.toList $ hyokaMap
+  if step > 1000
+     then return $ Ans.Cont 'A'
+     else return $ Ans.Cont $ 
+       snd $ last $ sort $  
+       map (\(hand,val) -> (val,hand)) $
+       Map.toList $ hyokaMap
 

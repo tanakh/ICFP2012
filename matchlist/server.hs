@@ -71,20 +71,20 @@ getResults results = do
 renderTable :: [Maybe SolvedResult] -> IO [Text]
 renderTable results = forM results $ \r -> do
   case r of
-    Just v -> mustache "./views/td.mustache" v
+    Just v | isJust (sExitCode v) -> mustache "./views/td.mustache" v
+           | otherwise -> mustache "./views/td.lte.mustache" v
     Nothing -> return "<td>N/A</td>"
 
 main :: IO ()
 main = do
-  renderResult >>= TL.putStrLn
-  -- serv
+  --renderResult >>= TL.putStrLn
+  serv
 
 renderResult :: IO Text
 renderResult = do
   results <- getSolvedResultList >>= getResults
   mustache "./views/home.mustache" results
 
--- does not works. i dont know why
 serv :: IO ()
 serv = scotty 3000 $ do
     middleware $ staticPolicy $ addBase "results"

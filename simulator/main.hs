@@ -40,19 +40,6 @@ autoProvider mv = putMVar mv Ans.End
 
 kbdProvider :: MVar Ans.Ans -> IO ()
 kbdProvider mv = forever $ do
-<<<<<<< HEAD
-  c <- getChar
-  let cmd = case c of
-        'h' -> "L"
-        'j' -> "D"
-        'k' -> "U"
-        'l' -> "R"
-        '.' -> "W"
-        'q' -> "A"
-        _   -> []
-  forM_ cmd $ \c ->
-    putMVar mv (Ans.Cont c)
-=======
   str <- getCharWithEsc
   forM_ (parse str (map fromEnum str)) $ \ans ->
     putMVar mv ans
@@ -79,6 +66,3 @@ kbdProvider mv = forever $ do
           b <- getChar
           c <- getChar
           return [a,b,c]
-      
-
->>>>>>> 4f74b19005416bc87a32898caf9e868a1ca80b9d

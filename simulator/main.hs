@@ -9,6 +9,7 @@ import qualified Ans as Ans
 import           LL
 import qualified Option as Opt
 import           Provider
+import qualified Flood
 
 
 main :: IO ()
@@ -17,9 +18,11 @@ main = do
   txt <- case Opt.input opt of
     Opt.Stdin -> getContents
     Opt.InputFile fn -> readFile fn
-  let bd0 = reverse $ lines txt
+  let (txtB,txtM) = span (/="") $ lines txt
+      bd0 = reverse txtB
       w = maximum $ map length bd0
       bd = map (take w . (++ repeat ' ')) bd0
+      fld = readFlood $ tail txtM
   ansMVar <- newEmptyMVar
   stateMVar <- newEmptyMVar
   solver <- case Opt.answer opt of

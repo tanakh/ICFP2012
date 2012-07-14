@@ -11,9 +11,6 @@ import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.State.Strict
 import Control.Concurrent
-import System.Environment
-import System.IO
-
 
 import qualified Ans as Ans
 import LL

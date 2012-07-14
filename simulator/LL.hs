@@ -5,7 +5,6 @@
 module LL where
 
 import Control.Applicative
-import Control.Concurrent
 import Control.Exception
 import Control.Monad
 import Control.Monad.Error
@@ -214,14 +213,7 @@ simulateStep mv = do
   llHistL %= (stat:)
   llReplayL %= (mv:)
 
-  cont <- case mv of
-    'L' -> move (-1) 0
-    'R' -> move 1    0
-    'U' -> move 0    1
-    'D' -> move 0    (-1)
-    'W' -> return Cont
-    'A' -> return Cont -- abort process is below
-    _   -> return Skip -- next step
+  cont <- moveC mv
   lms <- access llLambdasL
 
   once $ do
@@ -288,30 +280,44 @@ simulateStep mv = do
 
 move :: (MonadIO m, Functor m) => Int -> Int -> LLT m Result
 move dx dy = do
-  Pos cx cy <- access llPosL
+  p0 <- access llPosL
   bd <- access llBoardL
   step <- access llStepL
   lms  <- access llLambdasL
-  let (nx, ny) = (cx + dx, cy + dy)
+  let d = Pos dx dy
+      p1 = p0 + d
+      p2 = p0 + d + d
+  c0 <- readPos bd p0
+  c1 <- readPos bd p1
+  c2 <- readPos bd p2
 
-  once $ do
-    c <- readCell bd nx ny
-    if c `elem` " .O\\"
-      then do
-      writeCell bd cx cy ' '
-      writeCell bd nx ny 'R'
-      when (c == 'O') $ exitWith $ Win $ lms * 75 - step
-      when (c == '\\') $ lift $ void $ llLambdasL += 1
-      lift $ void $ llPosL ~= Pos nx ny
-      else do
-      let (n2x, n2y) = (nx + dx, ny + dy)
-      c2 <- readCell bd n2x n2y
-      when (c2 == ' ') $ do
-        writeCell bd cx cy ' '
-        writeCell bd nx ny 'R'
-        writeCell bd n2x n2y '*'
-        lift $ void $ llPosL ~= Pos nx ny
-    exitWith Cont
+  case () of
+    _ | c1 `elem` " .O\\" -> do
+        writePos bd p0 ' '
+        writePos bd p1 'R'
+        when (c1 == '\\') $ void $ llLambdasL += 1
+        llPosL ~= p1
+        if c1 == 'O'
+          then return $ Win $ lms * 75 - step
+          else return Cont
+      | dy == 0 && c0 == 'R' && c1 == '*' && c2 == ' ' -> do
+        writePos bd p0 ' '
+        writePos bd p1 'R'
+        writePos bd p2 '*'
+        llPosL ~= p1
+        return Cont
+    _ ->
+      return Cont
+
+moveC :: (MonadIO m, Functor m) => Char -> LLT m Result
+moveC c = case c of
+  'L' -> move (-1) 0
+  'R' -> move 1    0
+  'U' -> move 0    1
+  'D' -> move 0    (-1)
+  'W' -> return Cont
+  'A' -> return Cont -- abort process is below
+  _   -> return Skip -- next step
 
 getSize :: (MonadIO m) => LLT m (Int, Int)
 getSize = do
@@ -343,14 +349,14 @@ whenInBound bd x y def action = liftIO $ do
 readCell bd x y = whenInBound bd x y (return '#') $ do
   row <- GM.read bd y
   GM.read row x
-  
+
 readCellMaybe bd x y = whenInBound bd x y (return Nothing) $ do
   row <- GM.read bd y
-  Just <$> GM.read row x  
-  
+  Just <$> GM.read row x
+
 readCellList bd x y = whenInBound bd x y (return []) $ do
   row <- GM.read bd y
-  (:[]) <$> GM.read row x    
+  (:[]) <$> GM.read row x
 
 writeCell bd x y v = whenInBound bd x y (return ()) $ do
   row <- GM.read bd y

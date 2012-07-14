@@ -26,6 +26,7 @@ import Text.Printf
 
 import qualified Ans as Ans
 import qualified Option as Opt
+import qualified Flood
 import Pos
 
 type Board = VM.IOVector (UM.IOVector Char)
@@ -35,6 +36,7 @@ data LLState
     { llStep         :: Int
     , llLambdas      :: Int
     , llTotalLambdas :: Int
+    , llFlood        :: Flood.Flood
     , llPos          :: Pos
     , llBoard        :: Board
     , llHist         :: [LLState]
@@ -62,8 +64,8 @@ withBackup m = do
   put st
   return ret
 
-runLLT :: MonadIO m => [String] -> LLT m a -> m a
-runLLT bdl m = do
+runLLT :: MonadIO m => Flood.Flood -> [String] -> LLT m a -> m a
+runLLT fld bdl m = do
   let h = length bdl
       w = length $ head bdl
   bd <- liftIO $ V.thaw . V.fromList =<< mapM (U.thaw . U.fromList) bdl
@@ -90,6 +92,7 @@ runLLT bdl m = do
         , llTotalLambdas = lambdaNum
         , llPos = Pos cx cy
         , llBoard = bd
+        , llFlood = fld
         , llHist = []
         , llReplay = []
         }
@@ -133,9 +136,9 @@ showBoard = do
 
 type Solver m = LLT m Ans.Ans
 
-simulate :: Opt.Option -> [String] -> Solver IO -> IO Result
-simulate opt bd solver = do
-  runLLT bd $ do
+simulate :: Opt.Option -> Flood.Flood ->  [String] -> Solver IO -> IO Result
+simulate opt fld bd solver = do
+  runLLT fld bd $ do
     res <- once $ do
       repeatLoopT $ do
         -- pass the current status to the provider (and to player)

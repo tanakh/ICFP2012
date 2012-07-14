@@ -22,7 +22,7 @@ main = do
       bd0 = reverse txtB
       w = maximum $ map length bd0
       bd = map (take w . (++ repeat ' ')) bd0
-      fld = readFlood $ tail txtM
+      fld = Flood.readFlood $ tail txtM
   ansMVar <- newEmptyMVar
   stateMVar <- newEmptyMVar
   solver <- case Opt.answer opt of
@@ -38,5 +38,5 @@ main = do
     Opt.Auto -> do
       return $ autoSolver
       
-  print =<< simulate opt bd solver
+  print =<< simulate opt fld bd solver
 

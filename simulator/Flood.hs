@@ -3,7 +3,7 @@ module Flood
   , readFlood
   ) where
 
-type Flood = Flood { water :: Int, flooding :: Int, waterproof :: Int }
+data Flood = Flood { water :: Int, flooding :: Int, waterproof :: Int }
 
 defaultFlood = Flood 0 0 10
 

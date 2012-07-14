@@ -40,6 +40,7 @@ data LLState
     , llFlood        :: Flood.Flood
     , llPos          :: Pos
     , llBoard        :: Board
+    , llWaterStep    :: Int
     , llHist         :: [LLState]
     , llReplay       :: [Char]
     }
@@ -94,6 +95,7 @@ runLLT fld bdl m = do
         , llPos = Pos cx cy
         , llBoard = bd
         , llFlood = fld
+        , llWaterStep = 0
         , llHist = []
         , llReplay = []
         }
@@ -104,6 +106,7 @@ data Result
   | Abort Int
   | Dead Int
   | Cont
+  | Skip
   deriving (Show)
 
 scoreResult :: Result -> Int
@@ -122,17 +125,25 @@ showStatus = do
     (lms * 75 - step)
     (lms * 50 - step)
     (lms * 25 - step)
+
+  fld <- access llFloodL
+  ws <- access llWaterStepL
+  liftIO $ printf "water: %02d/%02d\n"
+    ws (Flood.waterproof fld)
   showBoard
 
 showBoard :: MonadIO m => LLT m ()
 showBoard = do
   bd <- access llBoardL
+  step <- access llStepL
+  fld <- access llFloodL
+  let wl = Flood.waterLevel step fld
   (w, h) <- getSize
   liftIO $ do
     forM_ [h-1, h-2 .. 0] $ \y -> do
       forM_ [0..w-1] $ \x -> do
         putChar =<< readCell bd x y
-      putStrLn ""
+      putStrLn $ if y < wl then "~~~~" else "    "
 
 type Solver m = LLT m Ans.Ans
 
@@ -193,8 +204,9 @@ undo = do
 
 simulateStep :: (Functor m, Monad m, MonadIO m) => Char -> LLT m Result
 simulateStep mv = do
+  fld  <- access llFloodL
   step <- access llStepL
-  bd <- access llBoardL
+  bd   <- access llBoardL
   lambdaNum <- access llTotalLambdasL
   (w, h) <- getSize
 
@@ -209,14 +221,16 @@ simulateStep mv = do
     'D' -> move 0    (-1)
     'W' -> return Cont
     'A' -> return Cont -- abort process is below
+    _   -> return Skip -- next step
   lms <- access llLambdasL
 
   once $ do
     case cont of
       Cont -> return ()
+      Skip -> continueWith cont
       _ -> exitWith cont
 
-    -- upadte
+    -- update
     nbd <- liftIO $ VM.replicateM h $ UM.replicate w ' '
     forM_ [0..h-1] $ \y -> do
       forM_ [0..w-1] $ \x -> do
@@ -253,15 +267,22 @@ simulateStep mv = do
     lift $ llBoardL ~= nbd
 
     when (mv == 'A') $ do
-      lms <- lift $ access llLambdasL
       exitWith $ Abort $ lms * 50 - step
 
     Pos nx ny <- lift $ access llPosL
     a <- readCell bd  nx (ny + 1)
     b <- readCell nbd nx (ny + 1)
     when (a /= '*' && b == '*') $ do -- DEATH!!
-      lms <- lift $ access llLambdasL
       exitWith $ Dead $ lms * 25 - step
+
+    let wl = Flood.waterLevel step fld
+    ws0 <- lift $ access llWaterStepL
+    let ws = if ny < wl  -- in the water
+                then ws0 + 1
+                else 0
+    when (ws > Flood.waterproof fld) $ do
+      exitWith $ Dead $ lms * 25 - step
+    lift $ llWaterStepL ~= ws
 
     lift $ llStepL += 1
     return Cont

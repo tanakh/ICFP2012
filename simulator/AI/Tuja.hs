@@ -69,16 +69,17 @@ main = do
   config <- randomConfig
   res <- defaultMainRes $ simpleSolver smellRef $ config
   opt <- Opt.parseIO  
-  let fn = case Opt.input opt of
+  let fnInput = case Opt.input opt of
         Opt.InputFile fp -> fp
         Opt.Stdin -> "STDIN"
 
+  let fnRec = (printf "record/%s-%d-%s.txt"
+            (dropExtension $ takeFileName fnInput)
+            (scoreResult res)
+            (take 6 $ show $ md5 $ L.pack $ show config)) 
+  hPutStrLn stderr fnRec
   liftIO $ system "mkdir -p record/"
-  liftIO $ writeFile
-    (printf "record/%s-%d-%s.txt"
-     (dropExtension $ takeFileName fn)
-     (scoreResult res)
-     (take 6 $ show $ md5 $ L.pack $ show config)) $
+  liftIO $ writeFile fnRec $
     unlines $
       [show $ scoreResult res,
        show $ res,

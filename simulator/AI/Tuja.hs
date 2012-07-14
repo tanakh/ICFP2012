@@ -112,8 +112,9 @@ launcher population submitQ learnedConfigs txt = forever $ do
     let res = res0 { submitter = \x -> atomically $ writeTQueue submitQ x}
     let l2 :: [Config]
         l2 = learnedConfigs
-    config <- randomConfig theRecipe
-    -- config <- choose learnedConfigs
+    config0 <- randomConfig theRecipe
+    -- config0 <- choose learnedConfigs
+    let config = if pop==0 then normalConfig else config0
     forkIO $ do
       atomically $ modifyTVar population (1+)
       runLLT txt $ simpleSolver res config '_'

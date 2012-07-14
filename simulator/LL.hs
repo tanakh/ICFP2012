@@ -97,7 +97,7 @@ runLLT fld bdl m = do
     readIORef ior
 
   let initState = LLState
-        { llStep = 1
+        { llStep = 0
         , llLambdas = 0
         , llTotalLambdas = lambdaNum
         , llPos = Pos cx cy
@@ -290,22 +290,23 @@ simulateStep mv = do
     when (mv == 'A') $ do
       exitWith $ Abort $ lms * 50 - step
 
+    lift $ llStepL += 1  -- increment step if it is not Abort
+
     Pos nx ny <- lift $ access llPosL
     a <- readCell bd  nx (ny + 1)
     b <- readCell nbd nx (ny + 1)
     when (a /= '*' && b == '*') $ do -- DEATH!!
-      exitWith $ Dead $ lms * 25 - step
+      exitWith $ Dead $ lms * 25 - (step + 1)
 
     let wl = Flood.waterLevel step fld
     ws0 <- lift $ access llWaterStepL
     let ws = if ny < wl  -- in the water
                 then ws0 + 1
                 else 0
-    when (ws > Flood.waterproof fld) $ do
-      exitWith $ Dead $ lms * 25 - step
     lift $ llWaterStepL ~= ws
+    when (ws > Flood.waterproof fld) $ do
+      exitWith $ Dead $ lms * 25 - (step + 1)
 
-    lift $ llStepL += 1
     return Cont
 
 move :: (MonadIO m, Functor m) => Int -> Int -> LLT m Result
@@ -328,7 +329,9 @@ move dx dy = do
         when (c1 == '\\') $ void $ llLambdasL += 1
         llPosL ~= p1
         if c1 == 'O'
-          then return $ Win $ lms * 75 - step
+          then do
+            llStepL += 1
+            Win <$> winScore
           else return Cont
       | dy == 0 && c0 == 'R' && c1 == '*' && c2 == ' ' -> do
         writePos bd p0 ' '

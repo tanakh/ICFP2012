@@ -9,10 +9,10 @@ data Flood = Flood { water :: Int, flooding :: Int, waterproof :: Int }
 defaultFlood = Flood 0 0 10
 
 waterLevel :: Int -> Flood -> Int
-waterLevel step fld =   -- step is 1-origin
+waterLevel step fld =   -- step is now 0-origin
   if flooding fld == 0
      then water fld
-     else water fld + (step-1) `div` flooding fld
+     else water fld + step `div` flooding fld
 
 readFlood :: [String] -> Flood
 readFlood = foldr upd defaultFlood . map r where

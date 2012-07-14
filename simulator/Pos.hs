@@ -33,3 +33,5 @@ instance (Num a) => Num (PosOf a) where
   -- enable easy vector multiplication
   fromInteger i = let j = fromInteger i in Pos j j
 
+instance Functor PosOf where
+  fmap f (Pos x y) = Pos (f x) (f y)

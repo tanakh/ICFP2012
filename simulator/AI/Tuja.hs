@@ -41,7 +41,7 @@ import           Pos
 
 import Data.Word
 
-data Resource = 
+data Resource =
   Resource {
     dijkstraMaps :: IORef (Map.Map String (Field Double)),
     submitter :: Tejun -> IO (),
@@ -57,13 +57,13 @@ getCurrentTime = read . show <$> epochTime
 main :: IO ()
 main = do
   startTime <- getCurrentTime
-  opt <- Option.parseIO  
+  opt <- Option.parseIO
   txt <- case Option.input opt of
     Option.Stdin -> getContents
     Option.InputFile fn -> readFile fn
   case Option.mode opt of
     Option.Ninja -> ninjaMain opt startTime txt
-    Option.Survey -> do  
+    Option.Survey -> do
       res0 <- initResource
       recipe <- randomRecipe
       config <- randomConfig recipe
@@ -78,12 +78,12 @@ main = do
       Tejun sco res rep <- readIORef tejunRef
       let fnInput = case Option.input opt of
             Option.InputFile fp -> fp
-            Option.Stdin -> "STDIN"  
+            Option.Stdin -> "STDIN"
           fnRec = (printf "record/%s/%d-%s-%s.txt"
                 (dropExtension $ takeFileName fnInput)
                 (sco)
                 (take 6 $ show $ md5 $ L.pack rep)
-                (take 6 $ show $ md5 $ L.pack $ show config)) 
+                (take 6 $ show $ md5 $ L.pack $ show config))
       when (Option.verbose opt) $ hPutStrLn stderr fnRec
       liftIO $ system $ "mkdir -p record/" ++ (dropExtension $ takeFileName fnInput) ++ "/"
       liftIO $ writeFile fnRec $
@@ -96,7 +96,7 @@ main = do
 
 ninjaMain :: Option.Option -> Int -> String -> IO ()
 ninjaMain opt startTime txt = do
-  submitQ <- newTQueueIO 
+  submitQ <- newTQueueIO
   bestTejun <- newTVarIO $ Tejun 0 Abort "A"
   population <- newTVarIO $ 0
   learnedConfigs <- read <$> readFile "learned.txt"
@@ -121,7 +121,7 @@ launcher population submitQ learnedConfigs txt = forever $ do
       atomically $ modifyTVar population (1-)
     return ()
   when (pop > 10) $ usleep 1000
-  
+
 collector opt submitQ bestTejun = forever $do
   tejun <- atomically $ readTQueue submitQ
   atomically $ modifyTVar bestTejun (max tejun)
@@ -129,10 +129,10 @@ collector opt submitQ bestTejun = forever $do
   when (Option.verbose opt) $ do
     hPutStrLn stderr $ "receive " ++ show tejun
     hPutStrLn stderr $ "my best " ++ show best
-  
+
 waitOhagi opt startTime bestTejun = do
   t <- getCurrentTime
-  case () of 
+  case () of
     _ | t > startTime + Option.timeout opt -2 -> do
           Tejun _ _ str <- atomically $ readTVar bestTejun
           putStrLn str
@@ -144,20 +144,20 @@ waitOhagi opt startTime bestTejun = do
 isEffectiveMove :: (Functor m, MonadIO m) => Set.Set Word64 -> Char -> LLT m Bool
 isEffectiveMove hist hand = do
   (res,h2) <- withStep hand $ do
-    res' <- access llResultL    
+    res' <- access llResultL
     h2'  <-access llHashL
     return (res', h2')
   let dies = res==Dead
-  extraFlag <- if (hand/='S') 
+  extraFlag <- if (hand/='S')
                then return True
                else do
                  withStep 'W' $ do
                      h3 <-access llHashL
                      return (h3 /= h2)
   return $ (not $ Set.member h2 hist) && not dies && extraFlag
-simpleSolver :: (Functor m, MonadIO m) 
+simpleSolver :: (Functor m, MonadIO m)
                 => Resource
-                -> Config 
+                -> Config
                 -> Char
                 -> LLT m Tejun
 simpleSolver resource config lastStepChar = do
@@ -165,12 +165,12 @@ simpleSolver resource config lastStepChar = do
   hash <- access llHashL
   liftIO $ modifyIORef (history resource) $ Set.insert hash
   hist <- liftIO $ readIORef (history resource)
-  validHands <- ('A':)<$> filterM (isEffectiveMove (hist)) "LRUDSW"  
+  validHands <- ('A':)<$> filterM (isEffectiveMove (hist)) "LRUDSW"
   let biasScore 'A' = -1e99
-      biasScore 'S' =  1e99 
+      biasScore 'S' =  1e99
       biasScore _   = 0
-  -- dono te ga tsuyoinoka; watashi kininarimasu! 
-  hyokaRef <- liftIO $ newIORef $ 
+  -- dono te ga tsuyoinoka; watashi kininarimasu!
+  hyokaRef <- liftIO $ newIORef $
                 Map.fromList [(hand, biasScore hand) | hand <- validHands]
   let addHyoka hand val =
         liftIO $ modifyIORef hyokaRef (Map.update (Just . (val+)) hand)
@@ -179,15 +179,15 @@ simpleSolver resource config lastStepChar = do
   step <- access llStepL
   let time :: Double
       time = fromIntegral step
-  
-  when (stepVisualize resource) showBoard                          
+
+  when (stepVisualize resource) showBoard
 
   -- treat each wind
   forM_ (windAtom config) $ \ (wave, windWave) -> do
-    forM_ validHands $ \hand -> do      
+    forM_ validHands $ \hand -> do
       let vec = fromIntegral <$> hand2pos hand
           windVec = toAmp2 time windWave
-          val = (sinh . toAmp time) wave * (vec `innerProd` windVec)    
+          val = (sinh . toAmp time) wave * (vec `innerProd` windVec)
       addHyoka hand val
   -- treat each search
   forM_ (searchAtom config) $ \ (wave, srcStr, passStr, pow) -> do
@@ -197,7 +197,7 @@ simpleSolver resource config lastStepChar = do
       Just a -> return a
       Nothing -> do
         b <- newF 0
-        liftIO $ modifyIORef (dijkstraMaps resource) $ 
+        liftIO $ modifyIORef (dijkstraMaps resource) $
           Map.insert srcStr b
         return b
     when (True) $ dijkstra smell srcStr passStr 1
@@ -207,14 +207,14 @@ simpleSolver resource config lastStepChar = do
       addHyoka hand $ (sinh . toAmp time) wave * smellAt
 
   hyokaMap <- liftIO $ readIORef hyokaRef
-  let ansHand = 
+  let ansHand =
         if step > 1000
         then 'A'
-        else 
-          snd $ last $ sort $  
+        else
+          snd $ last $ sort $
           map (\(hand,val) -> (val,hand)) $
           Map.toList $ hyokaMap
-  nextStepChar <- readPos bd $ roboPos + hand2pos ansHand
+  nextStepChar <- liftIO $ readPos bd $ roboPos + hand2pos ansHand
   lam0 <- access llLambdasL
   simulateStep ansHand
   lam1 <- access llLambdasL

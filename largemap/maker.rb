@@ -7,9 +7,9 @@ n = ARGV[0].to_i
   
   ar = (0...h).map{|y| (0...w).map{|x| "."}}
 
-  pats = [" ", ".", "\\", "*", "#"].map{|c| [c,rand]}
+  pats = [" ", "."," ", ".", "\\", "*", "#"].map{|c| [c,rand]}
 
-  100.times{
+  50.times{
     char = pats.sort_by{|c,hind|hind*rand}[0][0]
     rate  = 10 ** (-1-2 * rand)
     p1 = 628 * rand

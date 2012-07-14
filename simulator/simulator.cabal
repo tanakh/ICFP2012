@@ -18,6 +18,7 @@ library
   ghc-options:         -O3
   exposed-modules:     Ans
                        AI.Common
+                       AI.GorinNoSho
                        DefaultMain
                        Flood
                        LL
@@ -35,7 +36,7 @@ library
                      , pureMD5
                      , stm >= 2.4
                      , bytestring
-
+                     , pqueue
 executable ll-simulator
   ghc-options:         -O3
   hs-source-dirs:      dist
@@ -67,7 +68,8 @@ executable ll-ai-greedy3
   ghc-options:         -O3
   hs-source-dirs:      dist
   main-is:             ../AI/Greedy3.hs
-  build-depends:       base ==4.5.*, pqueue, simulator, vector, data-lens-fd, mtl, control-monad-loop, stm
+  build-depends:       base ==4.5.*, simulator
+                       , pqueue,vector, data-lens-fd, mtl, control-monad-loop, stm
 
 
 executable ll-ai-bf
@@ -76,3 +78,10 @@ executable ll-ai-bf
   main-is:             ../AI/BF.hs
   build-depends:       base ==4.5.*, simulator
                      , vector, data-lens-fd, mtl, control-monad-loop, stm
+
+executable ll-ai-tuja
+  ghc-options:         -O3
+  hs-source-dirs:      dist
+  main-is:             ../AI/Tuja.hs
+  build-depends:       base ==4.5.*, simulator, mtl
+                       , pqueue,vector, data-lens-fd, mtl, control-monad-loop, stm

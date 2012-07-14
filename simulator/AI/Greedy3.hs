@@ -70,27 +70,35 @@ valAfraid x = x
 
 greedySolver = safetynet $ do
   _ <- evaluatePlaying debugMode
-  yomi <- sort <$> mapM (\c -> (,c) <$> evaluateHand yomiDepth c) "LRUDA"
+  yomi <- sort <$> 
+          mapM (\c -> (\(val,hist)->(val,c,hist)) <$> 
+                      evaluateHand yomiDepth c) "LRUDA"
   when debugMode $ printe $ yomi
-  let (_, cmd) = head yomi
-  return $ Ans.Cont cmd
+  let (_, cmd, hist) = head yomi
+  if (length $ nub $ sort hist) <= yomiDepth-1
+     then return $ Ans.Cont 'A'
+     else return $ Ans.Cont cmd
 
-evaluateHand :: (Functor m, MonadIO m) => Int -> Char -> LLT m GrandValue
+evaluateHand :: (Functor m, MonadIO m) => Int -> Char -> LLT m (GrandValue, [Pos])
 evaluateHand depth hand
-  | depth <= 0 = evaluatePlaying False
+  | depth <= 0 = do 
+      val <- evaluatePlaying False
+      pos <- access llPosL
+      return (val, [pos])
   | otherwise = do
     withBackup $ do
       roboPos0 <- access llPosL
       result <- simulateStep hand
       roboPos1 <- access llPosL
-      case result of
-        Win n -> return $ grandValue n
-        Abort n -> do 
-          return $ grandValue n
-        Dead n -> return $ grandValue n
-        Skip -> return $ grandValue (-9999999)
-        Cont -> 
-          head . sort <$> mapM (evaluateHand (depth-1)) "LRUDA"
+      let addReturn = (\val -> return (val, [roboPos1]))
+      (\(val, future) -> (val, roboPos0 : future)) <$>
+        case result of
+          Win n   -> addReturn $ grandValue n
+          Abort n -> addReturn $ grandValue n
+          Dead n  -> addReturn $ grandValue n
+          Skip    -> addReturn $ grandValue (-9999999)
+          Cont    -> 
+            head . sort <$> mapM (evaluateHand (depth-1)) "LRUDA"
 
 dijkstra guide = do
   bd <- access llBoardL    

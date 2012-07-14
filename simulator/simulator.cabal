@@ -95,7 +95,7 @@ executable ll-ai-bf
 executable ll-ai-tuja
   ghc-options:         -O3
   hs-source-dirs:      dist
-  main-is:             ../AI/Tuja.hs
+  main-is:             ../AI/TujaLib.hs
   build-depends:       base ==4.5.*, simulator, mtl
                        , pqueue,vector, data-lens-fd, mtl, control-monad-loop
                        , stm, containers, unix, random,filepath, bytestring,pureMD5

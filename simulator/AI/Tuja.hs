@@ -53,6 +53,31 @@ toAmp2 t (Wave xs) =
   sum $ map (\(a,f,p0) -> Pos (a*cos(f*t+p0)) (a*sin(f*t+p0)) ) xs
 
 
+theRecipe :: Recipe
+theRecipe = Recipe
+ {
+    windFreqMin = -4,
+    windFreqMax = 0,
+    weightFreqMin = -4,
+    weightreqMax = 0,
+    weightAmp = 1,
+    searchAtomNum = 3,
+    weightAtomNum = 5
+         }
+randomRecipe :: IO Recipe
+randomRecipe = undefined
+
+data Recipe = 
+  Recipe {
+    windFreqMin :: Double,
+    windFreqMax :: Double,
+    weightFreqMin :: Double,
+    weightreqMax :: Double,
+    weightAmp :: Double,
+    searchAtomNum :: Double,
+    weightAtomNum :: Double
+         }
+
 data Config = 
   Config 
   {
@@ -67,9 +92,9 @@ data Config =
         )]
   } deriving (Eq, Show, Read)
 
-randomConfig :: IO Config
-randomConfig = 
-  Config <$> randomSearchAtom <*> randomMany 5 randomWindAtom1
+randomConfig :: Recipe -> IO Config
+randomConfig r = 
+  Config <$> randomSearchAtom r <*> randomMany (weightAtomNum r) (randomWindAtom1 r)
 
 
 choose :: [a] -> IO a
@@ -80,27 +105,27 @@ choose xs = do
 normalSearchAtom = 
     (Wave [(2.302, 0, 0)], "\\O", " .")
 
-randomSearchAtom :: IO [(Wave, String, String)]
-randomSearchAtom = 
-  (normalSearchAtom :) <$> randomMany 3 randomSearchAtom1
+randomSearchAtom :: Recipe -> IO [(Wave, String, String)]
+randomSearchAtom r = 
+  (normalSearchAtom :) <$> randomMany 3 (randomSearchAtom1 r)
 
-randomSearchAtom1 = do
-  w <- randomWeight
+randomSearchAtom1 r = do
+  w <- randomWeight r
   src <- choose ["\\O", "*"]
   pass <- choose [" "," ."," .\\"," .*"]
   return (w, src, pass)
 
-randomWindAtom1 = do
-  w <- randomWeight
+randomWindAtom1 r = do
+  w <- randomWeight r
   f  <- (*) <$> randomRIO (-1, 1) <*> (exp <$> randomRIO (-4, 0))
   p0 <- randomRIO (0, 2*pi)
   return (w, Wave [(1,f,p0)])
 
-randomWeight :: IO Wave
-randomWeight = Wave <$> randomMany 5 randomWeight1
+randomWeight ::  Recipe -> IO Wave
+randomWeight r = Wave <$> randomMany 5 (randomWeight1 r)
 
-randomWeight1 :: IO (Double, Double, Double)
-randomWeight1 = do
+randomWeight1 :: Recipe -> IO (Double, Double, Double)
+randomWeight1 r = do
   a  <- randomRIO (0, 1)
   f  <- (*) <$> randomRIO (-1, 1) <*> (exp <$> randomRIO (-4, 0))
   p0 <- randomRIO (0, 2*pi)
@@ -147,7 +172,7 @@ main = do
     Option.Ninja -> ninjaMain opt startTime  fld bd
     Option.Survey -> do  
       res0 <- initResource
-      config <- randomConfig  
+      config <- randomConfig theRecipe
       let res 
             | Option.verbose opt = res0{submitter = printe}
             | otherwise          = res0
@@ -184,7 +209,7 @@ launcher population submitQ fld bd = forever $ do
   when (pop < 30) $ do
     res0 <- initResource
     let res = res0 { submitter = \x -> atomically $ writeTQueue submitQ x}
-    config <- randomConfig
+    config <- randomConfig theRecipe
     forkIO $ do
       atomically $ modifyTVar population (1+)
       runLLT fld bd $ simpleSolver res config

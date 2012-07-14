@@ -84,4 +84,5 @@ executable ll-ai-tuja
   hs-source-dirs:      dist
   main-is:             ../AI/Tuja.hs
   build-depends:       base ==4.5.*, simulator, mtl
-                       , pqueue,vector, data-lens-fd, mtl, control-monad-loop, stm
+                       , pqueue,vector, data-lens-fd, mtl, control-monad-loop
+                       , stm, containers, unix

@@ -23,6 +23,9 @@ instance Show a => Show (PosOf a) where
 norm :: (Num a) => PosOf a -> a
 norm (Pos x y) = abs x + abs y
 
+innerProd :: (Num a) => (PosOf a) -> (PosOf a) -> a
+innerProd (Pos x1 y1)  (Pos x2 y2) = (x1*x2) + (y1*y2)
+
 instance (Num a) => Num (PosOf a) where
   (Pos x1 y1) + (Pos x2 y2) = (x1+x2) `Pos` (y1+y2)
   (Pos x1 y1) - (Pos x2 y2) = (x1-x2) `Pos` (y1-y2)

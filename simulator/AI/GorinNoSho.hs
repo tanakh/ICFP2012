@@ -21,6 +21,11 @@ printe = liftIO . hPutStrLn stderr . show
 
 type Field a = VM.IOVector (VM.IOVector a) 
 
+newF :: (MonadIO m) => a -> LLT m (Field a)
+newF initVal = do
+  (w,h) <- getSize
+  liftIO $ VM.replicateM h $ VM.replicate w initVal
+  
 unsafeReadFIO :: Field a -> Pos -> IO a
 unsafeReadFIO field (Pos x y) = do
   line <- VM.unsafeRead field y
@@ -114,18 +119,18 @@ wideShow width val
     cut ('0':'.':xs) = '.':xs
     cut x = x
     
-dijkstra :: (MonadIO m, Terrain a) => String -> String -> a -> LLT m (Field a)
-dijkstra sourceStr passableStr initVal = do
+dijkstra :: (MonadIO m, Terrain a) => 
+            Field a -> String -> String -> a -> LLT m (Field a)
+dijkstra field sourceStr passableStr initVal = do
   bd <- access llBoardL  
-  (w,h) <- getSize
-  field <- liftIO $ VM.replicateM h $ VM.replicate w unknown
   probes <- liftIO $ newIORef $ Q.empty
-  loopPos $ \ r -> do
+  forPos $ \ r -> do
     a <- readPos bd r
     case a of
-      _ | a `elem` sourceStr   -> 
+      _ | a `elem` sourceStr   -> do
            liftIO $ modifyIORef probes $ Q.insert (initVal, r) 
-        | a `elem` passableStr -> return ()
+           writeF field r unknown
+        | a `elem` passableStr -> writeF field r unknown
         | otherwise            -> writeF field r blocked
   while (liftIO ((not . Q.null) <$> readIORef probes)) $ do
     (val, r) <- liftIO $ Q.findMin <$> readIORef probes

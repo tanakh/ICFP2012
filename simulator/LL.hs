@@ -55,6 +55,7 @@ import Data.Word
 import System.IO
 import Text.Printf
 
+import AI.Oracle(Oracle)
 import qualified Ans
 import qualified Flood
 import Pos

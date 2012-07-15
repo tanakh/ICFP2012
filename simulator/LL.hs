@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses, UndecidableInstances #-}
-{-# LANGUAGE RecordWildCards, ViewPatterns #-}
+{-# LANGUAGE RecordWildCards, ViewPatterns, BangPatterns #-}
 
 module LL (
   -- simulate whole game
@@ -382,34 +382,34 @@ update wlog commit = do
 
   dior <- liftIO $ newIORef False
 
-  newRocks <- liftIO $ forM cands $ \p -> do
+  newRocks <- liftIO $ forM cands $ \ !p -> do
     -- la [ca] ra
     -- lb  cb  rb
     -- lc  cc  rc
-    let pla = p + Pos (-1) 0
-        plb = p + Pos (-1) (-1)
-        plc = p + Pos (-1) (-2)
-        pca = p + Pos 0    0
-        pcb = p + Pos 0    (-1)
-        pcc = p + Pos 0    (-2)
-        pra = p + Pos 1    0
-        prb = p + Pos 1    (-1)
-        prc = p + Pos 1    (-2)
+    let !pla = p + Pos (-1) 0
+        !plb = p + Pos (-1) (-1)
+        !plc = p + Pos (-1) (-2)
+        !pca = p + Pos 0    0
+        !pcb = p + Pos 0    (-1)
+        !pcc = p + Pos 0    (-2)
+        !pra = p + Pos 1    0
+        !prb = p + Pos 1    (-1)
+        !prc = p + Pos 1    (-2)
 
-    la <- readPos llBoard pla
-    lb <- readPos llBoard plb
-    lc <- readPos llBoard plc
-    ca <- readPos llBoard pca
-    cb <- readPos llBoard pcb
-    cc <- readPos llBoard pcc
-    ra <- readPos llBoard pra
-    rb <- readPos llBoard prb
-    rc <- readPos llBoard prc
+    !la <- readPos llBoard pla
+    !lb <- readPos llBoard plb
+    !lc <- readPos llBoard plc
+    !ca <- readPos llBoard pca
+    !cb <- readPos llBoard pcb
+    !cc <- readPos llBoard pcc
+    !ra <- readPos llBoard pra
+    !rb <- readPos llBoard prb
+    !rc <- readPos llBoard prc
 
     case () of
       _ | ca == 'W' -> do
             forM_ adjacent $ \((pca+) -> pw) -> do
-              cell <- readPos llBoard pw
+              !cell <- readPos llBoard pw
               when (cell == ' ') $ wlog pw 'W'
             return pca
 

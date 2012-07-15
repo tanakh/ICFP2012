@@ -184,7 +184,7 @@ simpleSolver resource config lastStepChar = do
   -- treat each wind
   forM_ (windAtom config) $ \ (wave, windWave) -> do
     forM_ validHands $ \hand -> do
-      let vec = fromIntegral <$> hand2pos hand
+      let vec = posToDpos $ hand2pos hand
           windVec = toAmp2 time windWave
           val = (sinh . toAmp time) wave * (vec `innerProd` windVec)
       addHyoka hand val

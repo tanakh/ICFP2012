@@ -178,14 +178,13 @@ main = do
       w <- randomRIO (0.3, 2.0) -- !!!!!!!
       return (char, w)
     history <- newIORef HM.empty
-
+    
     earthDrugAmp <- liftIO $ Oracle.ask oracle "earthDrugAmp" $ return (0.0::Double)
     earthDrug <- exp <$> randomRIO (- earthDrugAmp, earthDrugAmp)
     itemLoveAmp <- liftIO $ Oracle.ask oracle "itemLoveAmp" $ return (0.0:: Double)
     placeLoveAmp <- liftIO $ Oracle.ask oracle "placeLoveAmp" $ return (0.0:: Double)
     placeLoveNum <- liftIO $ Oracle.ask oracle "placeLoveNum" $ return (0.0:: Double)
     liftIO $ modifyIORef yomiRef (1+)
-
     --- start of One Challenge
     defaultMain oracle $ do
       step <- access llStepL

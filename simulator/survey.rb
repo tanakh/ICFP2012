@@ -3,7 +3,7 @@
 numThre = ARGV[0].to_i
 
 $mapFns = `ls -1 ../data/*.map`.split(/\n/) + `ls -1 ../smallmap/*.map`.split(/\n/)
-# $mapFns += `ls -1 ../mediummap/*.map`.split(/\n/) 
+$mapFns += `ls -1 ../mediummap/*.map`.split(/\n/) 
 
 
 

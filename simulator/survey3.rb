@@ -20,21 +20,9 @@ tids = []
 
 `mkdir -p conf`
 $mapFns.each{|mapfn|
-  [2,4].each{|greedyDepth|
-    [10,8,2,12].each{|bfDepth|
-      ['True', 'False'].each{|first|
-        conffn = "conf/#{bfDepth}-#{first}-#{greedyDepth}"
-        open(conffn,'w'){|fp| fp.puts <<CONF
-# Oracle
-# Configuration File.
-# Only The Fourth Line is important.
-fromList [("bfDepth","#{bfDepth}"),("combineBFFirst","#{first}"),("greedyDepth","#{greedyDepth}")]
-CONF
-          q.push([conffn, mapfn])
-        }
-      }
-    }
-  }
+
+  conffn ="challenger.conf"
+  q.push([conffn, mapfn])
 }
 
 numThre.times{|i|

@@ -37,6 +37,7 @@ data LLState
     , llStep         :: {-# UNPACK #-} !Int
     , llPos          :: {-# UNPACK #-} !Pos
     , llLambdas      :: {-# UNPACK #-} !Int
+    , llPenalty      :: {-# UNPACK #-} !Int
 
     , llRockPos      :: ![Pos]
     , llWaterStep    :: {-# UNPACK #-} !Int
@@ -56,6 +57,7 @@ data LLPatch
     , pPrevResult  :: !Result
     , pPrevPos     :: {-# UNPACK #-} !Pos
     , pPrevLambdas :: {-# UNPACK #-} !Int
+    , pPrevPenalty :: {-# UNPACK #-} !Int
     , pPrevRocks   :: ![Pos]
     , pPrevWater   :: {-# UNPACK #-} !Int
     , pPrevRazors  :: {-# UNPACK #-} !Int

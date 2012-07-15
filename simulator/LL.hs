@@ -132,7 +132,7 @@ runLLT txt m = do
   let rpos      = snd . head $ finds (=='R')
       lpos      = snd . head $ finds (=='L')
       lambdaNum = length $ finds (=='\\')
-      rocks     = map snd $ finds (=='*')
+      rocks     = map snd $ finds isRock
 
   bd <- liftIO $ V.thaw . V.fromList =<< mapM (U.thaw . U.fromList) bdl
 
@@ -267,6 +267,9 @@ moveC c = case c of
   'A' -> \_ -> return ()
   _   -> assert False undefined
 
+isRock :: Char -> Bool
+isRock c = c == '*' || c == '@'
+
 move :: (MonadIO m, Functor m) => Pos -> WriteLogger m -> LLT m ()
 move d@(Pos _ dy) wlog = do
   LLState {..} <- get
@@ -288,11 +291,11 @@ move d@(Pos _ dy) wlog = do
         when (c1 == '!')  $ void $ llRazorsL += 1
         llPosL ~= p1
         return ()
-      | dy == 0 && c1 == '*' && c2 == ' ' -> do
+      | dy == 0 && isRock c1 && c2 == ' ' -> do
         -- push rock
         wlog p0 ' '
         wlog p1 'R'
-        wlog p2 '*'
+        wlog p2 c1
         llPosL ~= p1
         llRockPosL %= map (\p -> if p == p1 then p2 else p)
         return ()
@@ -341,46 +344,59 @@ update wlog commit = do
   newRocks <- forM cands $ \p -> do
     -- la [ca] ra
     -- lb  cb  rb
+    -- lc  cc  rc
     let pla = p + Pos (-1) 0
         plb = p + Pos (-1) (-1)
+        plc = p + Pos (-1) (-2)
         pca = p + Pos 0    0
         pcb = p + Pos 0    (-1)
+        pcc = p + Pos 0    (-2)
         pra = p + Pos 1    0
         prb = p + Pos 1    (-1)
+        prc = p + Pos 1    (-2)
 
     la <- readPos llBoard pla
     lb <- readPos llBoard plb
+    lc <- readPos llBoard plc
     ca <- readPos llBoard pca
     cb <- readPos llBoard pcb
+    cc <- readPos llBoard pcc
     ra <- readPos llBoard pra
     rb <- readPos llBoard prb
+    rc <- readPos llBoard prc
 
     case () of
-      _ | ca == '*' &&
-          cb == ' ' -> do
-            wlog pca ' '
-            wlog pcb '*'
-            return pcb
-        | ca == '*' && ra == ' ' &&
-          cb == '*' && rb == ' ' -> do
-            wlog pca ' '
-            wlog prb '*'
-            return prb
-        | la == ' ' && ca == '*' &&
-          lb == ' ' && cb == '*' -> do
-            wlog pca ' '
-            wlog plb '*'
-            return plb
-        | ca == '*'  && ra == ' ' &&
-          cb == '\\' && rb == ' ' -> do
-            wlog pca ' '
-            wlog prb '*'
-            return prb
-        | ca == 'W' -> do
+      _ | ca == 'W' -> do
             forM_ adjacent $ \((pca+) -> pw) -> do
               cell <- readPos llBoard pw
               when (cell == ' ') $ wlog pw 'W'
             return pca
+
+        | isRock ca &&
+          cb == ' ' -> do
+            wlog pca ' '
+            wlog pcb $ if ca == '@' && cc /= ' ' then '\\' else ca
+            when (cc == 'R') $ void $ llResultL ~= Dead
+            return pcb
+        | isRock ca && ra == ' ' &&
+          isRock cb && rb == ' ' -> do
+            wlog pca ' '
+            wlog prb $ if ca == '@' && rc /= ' ' then '\\' else ca
+            when (rc == 'R') $ void $ llResultL ~= Dead
+            return prb
+        | la == ' ' && isRock ca &&
+          lb == ' ' && isRock cb -> do
+            wlog pca ' '
+            wlog plb $ if ca == '@' && lc /= ' ' then '\\' else ca
+            when (lc == 'R') $ void $ llResultL ~= Dead
+            return plb
+        | isRock ca  && ra == ' ' &&
+          cb == '\\' && rb == ' ' -> do
+            wlog pca ' '
+            wlog prb $ if ca == '@' && rc /= ' ' then '\\' else ca
+            when (rc == 'R') $ void $ llResultL ~= Dead
+            return prb
+
       _ ->
         return pca
 
@@ -393,13 +409,13 @@ update wlog commit = do
 
   -- sanitize rocks' pos
   newRocks' <-
-    filterM (\p -> (=='*') <$> readPos llBoard p) newRocks
+    filterM (\p -> isRock <$> readPos llBoard p) newRocks
 
   -- rocks must be sorted
   llRockPosL ~= sortp newRocks'
 
   cup <- readPos llBoard $ llPos + Pos 0 1
-  when (bup /= '*' && cup == '*') $ do
+  when (not (isRock bup) && isRock cup) $ do
     -- Totuzen no DEATH!!
     void $ llResultL ~= Dead
 

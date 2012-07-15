@@ -26,7 +26,7 @@ def survey()
   STDERR.print "\n"
   STDERR.print "total: #{total}\n"
   maxcnt = xs0.map{|fn,cnt| cnt}.max
-  $launchInfo = xs0.map{|fn,cnt| [fn, (maxcnt-cnt).to_f]}
+  $launchInfo = xs0.map{|fn,cnt| [fn, (maxcnt-cnt+1).to_f]}
 end
 
 survey()

@@ -52,7 +52,7 @@ type History = IORef (HM.HashMap Word64 Int)
 
 readHistory :: History -> Word64 -> IO Int
 readHistory hist key = do
-  hm <- readIORef hist 
+  hm <- readIORef hist
   case HM.lookup key hm of
     Just x  -> return x
     Nothing -> do
@@ -64,16 +64,13 @@ modifyHistory hist key f = do
   x <- readHistory hist key
   modifyIORef hist $ HM.insert key (f x)
 
-
-
-
 isWorseThan :: CacheEntry -> CacheEntry -> Bool
 a `isWorseThan` b =
-  ceStep a >= ceStep b
+  (ceScore a, - cePenalty a) <= (ceScore b, - cePenalty b)
+  && ceStep a >= ceStep b
   && ceWaterStep a >= ceWaterStep b
   && ceRazors a <= ceRazors b
-  && (ceScore a, 0) <= (ceScore b, 0)
-  --  && (ceScore a, - cePenalty a) <= (ceScore b, - cePenalty b)
+  -- && (ceScore a, 0) <= (ceScore b, 0)
 
 addCacheEntry :: IORef (HM.HashMap Word64 [CacheEntry]) -> LL Int -> LL Int
 addCacheEntry hmr m = do
@@ -90,7 +87,9 @@ addCacheEntry hmr m = do
   let cm = case HM.lookup (llHash st) hm of
         Just cfs
           | not $ any (ce `isWorseThan`) cfs -> Nothing
-          | otherwise -> Just $ maximum $ map ceScore cfs
+          | otherwise ->
+            return minf
+            -- Just $ maximum $ map ceScore cfs
         _ -> Nothing
   case cm of
     Nothing -> do
@@ -127,21 +126,31 @@ adjR =
   , Pos (-1) 0
   ]
 
+adj4 =
+  [ Pos (-1) 0
+  , Pos 1 0
+  , Pos 0 (-1)
+  , Pos 0 1
+  ]
+adj4m = "LRUD"
+
 simplify :: Bool -> LL ()
 simplify verboseSwitch = do
   bd <- access llBoardL
   forPos $ \p -> do
     cell <- liftIO $ readPos bd p
     liftIO $ when (cell == '.') $ do
-      keep <- forM adjR $ \((+p) -> n) -> do
+      keepR <- forM adjR $ \((+p) -> n) -> do
         nell <- readPos bd n
-        return $ isRock nell || nell == 'W'
-      when (not $ or keep) $ do
+        return $ isRock nell
+      keepW <- forM adjacent $ \((+p) -> n) -> do
+        nell <- readPos bd n
+        return $ nell == 'W'
+      when (not $ or keepR || or keepW) $ do
         writePos bd p ' '
   when (verboseSwitch) $ do
     liftIO $ putStrLn "simplify to:"
     showBoard
-
 
 main :: IO ()
 main = do
@@ -157,7 +166,7 @@ main = do
 
   when (Option.oracleSource opt/= "") $ do
     Oracle.load oracle $ Option.oracleSource opt
-  hyperHistory <- newIORef HM.empty  
+  hyperHistory <- newIORef HM.empty
 
   infiniteLoop <- liftIO $ Oracle.ask oracle "infiniteLoop" $ 
     return (Option.input opt == Option.Stdin)
@@ -169,16 +178,16 @@ main = do
     history <- newIORef HM.empty
 
     earthDrugAmp <- liftIO $ Oracle.ask oracle "earthDrugAmp" $ return (0.0::Double)
-    earthDrug <- exp <$> randomRIO (- earthDrugAmp, earthDrugAmp) 
+    earthDrug <- exp <$> randomRIO (- earthDrugAmp, earthDrugAmp)
     itemLoveAmp <- liftIO $ Oracle.ask oracle "itemLoveAmp" $ return (0.0:: Double)
     placeLoveAmp <- liftIO $ Oracle.ask oracle "placeLoveAmp" $ return (0.0:: Double)
     placeLoveNum <- liftIO $ Oracle.ask oracle "placeLoveNum" $ return (0.0:: Double)
-    
 
     --- start of One Challenge
     defaultMain oracle $ do
       step <- access llStepL
       (liftIO . Oracle.submit oracle) =<< getAbortTejun
+
       (w,h) <- getSize
       bfDepth <- liftIO $ Oracle.ask oracle "bfDepth" $ return (max 16 $ min 10 $
         640 `div`( w+h  ))
@@ -186,14 +195,14 @@ main = do
 
       hashNow <- access llHashL
       kabutta <- (>2) <$> (liftIO $ readHistory history hashNow)
-      liftIO $ modifyHistory history hashNow (1+)  
+      liftIO $ modifyHistory history hashNow (1+)
 
       liftIO $ do
         useHyperHistory <- Oracle.ask oracle "useHyperHistory" $ return False
-        when (useHyperHistory) $ modifyHistory hyperHistory hashNow (1+)  
-  
+        when (useHyperHistory) $ modifyHistory hyperHistory hashNow (1+)
+
       (mov, sc) <- withBackup $ do
-        simplify (Option.verbose opt) 
+        simplify (Option.verbose opt)
         rs <- forM moves $ \mov -> do
           cur <- get
           b <- prePruning cur mov
@@ -212,7 +221,7 @@ main = do
           liftIO $ print . sum . map length . map snd . HM.toList =<< readIORef hmr
         return $ maximumBy (comparing snd) rs
 
-  
+
       (w,h) <- getSize
       roboPos <- access llPosL
       let radius :: Double
@@ -220,15 +229,15 @@ main = do
       bd <- access llBoardL
 
       greedyDepth <- liftIO $ Oracle.ask oracle "greedyDepth" $ return 4
-      valueField <- 
-        if step > 0 
+      valueField <-
+        if step > 0
           then liftIO $ readIORef valueFieldRef
           else do
             ret <- newF (0::Double)
             liftIO $ writeIORef valueFieldRef ret
             return ret
-      loveField <- 
-        if step > 0 
+      loveField <-
+        if step > 0
           then liftIO $ readIORef loveFieldRef
           else do
             newLoveField <- newF (0::Double)
@@ -240,14 +249,14 @@ main = do
               when (placeLoveNum > 0) $ do
                 dice <- liftIO $ randomRIO (0,1)
                 when (dice < placeLoveNum /(fromIntegral $ w*h)) $ do
-                  writeF newLoveField r =<< liftIO (randomRIO (0, placeLoveAmp * radius))                
+                  writeF newLoveField r =<< liftIO (randomRIO (0, placeLoveAmp * radius))
             liftIO $ writeIORef loveFieldRef newLoveField
             return newLoveField
       -- love disappears when you reach there...
       writeF loveField roboPos 0
 
-      razors <- access llRazorsL             
-      let passable 
+      razors <- access llRazorsL
+      let passable
             | razors > 0 = " .!\\RWA"
             | otherwise  = " .!\\RA"
       dijkstraEX valueField "\\O" passable motionWeight earthDrug loveField 0
@@ -259,7 +268,7 @@ main = do
                      return ((flag,val3), hand)
                let top = head $ sort $ cand
                return $ (snd top {-move-}, fst (fst top) {-whether it was safe-})
-  
+
       combineBFFirst <- liftIO $ Oracle.ask oracle "combineBFFirst" $ return True
       perfectGreedy <- liftIO $ Oracle.ask oracle "perfectGreedy" $ return (w+h>80)
       perfectSearch <- liftIO $ Oracle.ask oracle "perfectSearch" $ return (w+h<40)
@@ -272,43 +281,50 @@ main = do
            | combineBFFirst                             = mov2
            | not (combineBFFirst) && (yabasa > 0)       = mov2
            | otherwise                                  = mov
-  
+
       when (Option.verbose opt) $ liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++  [mov,mov2]
       liftIO $ sleep 100
       return $ Ans.Cont mov3
-  
 
+ordering :: LL [Char]
+ordering = do
+  LLState {..} <- get
+  pref <- forM (zip adj4m adj4) $ \(mv, d) -> do
+    let pp = llPos + d
+    cell <- liftIO $ readPos llBoard pp
+    let lev =
+          case cell of
+            '\\' -> 20
+            '!' -> 15
+            '*' -> 10
+            '@' -> 10
+            _   -> 5
+    return (lev, mv)
 
+  return $ map snd . reverse . sort $ pref ++ zip [2, 1, 0] "SWA"
 
 
 prePruning :: LLState -> Char -> LL Bool
 prePruning LLState {..} move
   | move == 'S' && llRazors == 0 =
     return False
-  | otherwise =
+  | otherwise = do
     return True
 
 pruning :: LLState -> Char -> LLState -> LL Bool
 pruning cur move next
   | move `elem` "LRUD" && llPos cur == llPos next =
     return False
-  | otherwise =
+  | otherwise = do
     return True
 
-scoreOfs = 10^5
+scoreOfs = 10^4
 
 staticScore :: Field Int -> LL Int
 staticScore _ = do
   LLState {..} <- get
   abt <- abortScore
   return $ (abt * scoreOfs) - llPenalty
-  {-
-  aScore <- abortScore
-  pos <- access llPosL
-  futureScore <- unsafeReadF valueField pos
-  step <- access llStepL
-  return $ aScore + 0*step + futureScore
-  -}
 
 eval :: Field Int -> Cache -> Int -> Int -> LL Int
 eval valueField cache !curBest !fuel = do
@@ -325,6 +341,7 @@ eval valueField cache !curBest !fuel = do
 
 best :: Cache -> [Char] -> (Char -> LL Int) -> LL Int
 best cache ls m = do
+  ols <- ordering
   res <- forM ls $ \x -> do
     cur <- get
     pp <- prePruning cur x

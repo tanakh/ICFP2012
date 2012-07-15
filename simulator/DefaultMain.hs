@@ -33,6 +33,7 @@ defaultMain oracle theSolver = do
   myProcID <- getProcessID
   let handler = do
        Tejun _ _ rep <- atomically $ readTVar (Oracle.tejunVar oracle)
+       Oracle.save oracle  
        putStrLn rep
        signalProcess sigKILL myProcID
   installHandler sigINT (Catch handler) Nothing

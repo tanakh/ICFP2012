@@ -24,6 +24,7 @@ import LL
 import AI.GorinNoSho
 import AI.Oracle
 import qualified Option
+import AI.Cooking(choose)
 
 minf :: Int
 minf = -10^(9::Int)
@@ -69,6 +70,7 @@ main = do
   opt <- Option.parseIO
   historyRef <- newIORef HS.empty
   valueFieldRef <- newIORef undefined
+  hashLogRef <- newIORef []
   let inputfn = case Option.input opt of
             Option.InputFile fp -> fp
             Option.Stdin -> "STDIN"
@@ -80,8 +82,14 @@ main = do
     bfDepth <- liftIO $ Oracle.ask oracle "bfDepth" $ return 10
     hmr <- liftIO $ newIORef HM.empty
     hashNow <- access llHashL
+    
+    kabutta <- liftIO $ do
+           modifyIORef hashLogRef (hashNow:)
+           xs <- readIORef hashLogRef
+           return $ (length (take 3 xs) >= 3) && ((1==) $length $ nub $take 3 xs)
     liftIO $ modifyIORef historyRef $ HS.insert hashNow
     history <- liftIO $ readIORef historyRef
+    
     (mov, sc) <- withBackup $ search undefined hmr 0 bfDepth
 
     greedyDepth <- liftIO $ Oracle.ask oracle "greedyDepth" $ return 4
@@ -103,7 +111,11 @@ main = do
              return $ (snd top {-move-}, fst (fst top) {-whether it was safe-})
 
     combineBFFirst <- liftIO $ Oracle.ask oracle "combineBFFirst" $ return True
+    perfectGreedy <- liftIO $ Oracle.ask oracle "perfectGreedy" $ return False
+    movRand <- liftIO $ choose "RLDU"
     let mov3
+         | kabutta                                    = movRand
+         | perfectGreedy                              = mov2
          | combineBFFirst && (mov /= 'A' || val <= 0) = mov
          | combineBFFirst                             = mov2
          | not (combineBFFirst) && confidence         = mov2

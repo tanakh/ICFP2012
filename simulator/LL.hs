@@ -26,6 +26,9 @@ module LL (
   -- diagnostic
   showStatus, showBoard,
 
+  -- varidate inputs
+  validInputs, isValidInput,
+
   module State,
   ) where
 
@@ -552,3 +555,9 @@ searchBoard p = do
     when (p cell) $
       modifyIORef ior ((pos, cell):)
   liftIO $ readIORef ior
+
+validInputs :: [Char]
+validInputs = "LRUDSWA"
+
+isValidInput :: Char -> Bool
+isValidInput = (`elem` validInputs)

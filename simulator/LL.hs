@@ -231,7 +231,9 @@ simulateStep :: (Functor m, MonadIO m) => Char -> LLT m ()
 simulateStep mv
   | mv == 'A' = do -- abort process immediately
     stash 'A'
-    void $ llResultL ~= Abort
+    llStepL += 1
+    llResultL ~= Abort
+    return ()
   | otherwise = do
     stash mv
     wlog <- liftIO $ newIORef []
@@ -439,20 +441,20 @@ stash :: (MonadIO m, Functor m) => Char -> LLT m ()
 stash mv = do
   LLState {..} <- get
   let revPatch = LLPatch
-        { pMove = mv
-        , pPrevPos = llPos
+        { pMove        = mv
+        , pPrevResult  = llResult
+        , pPrevPos     = llPos
         , pPrevLambdas = llLambdas
-        , pPrevRocks = llRockPos
-        , pPrevWater = llWaterStep
-        , pPrevRazors = llRazors
-        , pBoardDiff = []
+        , pPrevRocks   = llRockPos
+        , pPrevWater   = llWaterStep
+        , pPrevRazors  = llRazors
+        , pBoardDiff   = []
         }
   void $ llPatchesL %= (revPatch:)
 
 undo :: MonadIO m => LLT m ()
 undo = do
-  ps <- gets llPatches
-  liftIO $ print $ length ps
+  ps <- access llPatchesL
   case ps of
     [] -> do
       liftIO $ putStrLn "cannot undo"
@@ -465,19 +467,21 @@ unapply :: LLState -> LLPatch -> IO LLState
 unapply st LLPatch {..} = do
   forM_ pBoardDiff $ \(pos, cell) -> writePos (llBoard st) pos cell
   return $ LLState
-    { llTotalLambdas = llTotalLambdas st
+    { -- constant
+      llTotalLambdas = llTotalLambdas st
     , llLiftPos = llLiftPos st
     , llFlood = llFlood st
     , llTramp = llTramp st
     , llGrowth = llGrowth st
 
-    , llResult = llResult st
-    , llStep = llStep st - 1
-    , llPos = pPrevPos
-    , llLambdas = pPrevLambdas
-    , llRockPos = pPrevRocks
+      -- revert previous status
+    , llResult    = pPrevResult
+    , llStep      = llStep st - 1
+    , llPos       = pPrevPos
+    , llLambdas   = pPrevLambdas
+    , llRockPos   = pPrevRocks
     , llWaterStep = pPrevWater
-    , llRazors = pPrevRazors
+    , llRazors    = pPrevRazors
 
     , llBoard = llBoard st
     , llPatches = drop 1 $ llPatches st

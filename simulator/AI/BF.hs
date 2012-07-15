@@ -23,13 +23,19 @@ bf = do
   liftIO $ hPutStrLn stderr $ "score : " ++ show sc ++ ", move: " ++ [mov]
   return $ Ans.Cont mov
 
+withStep :: (Functor m, MonadIO m) => Char -> LLT m b -> LLT m b
+withStep mv m = do
+  simulateStep mv
+  ret <- m
+  undo
+  return ret
+
 search :: (MonadIO m, Functor m) => Int -> LLT m (Char, Int)
 search fuel
   | fuel <= 0 =
     (undefined,) <$> staticScore
   | otherwise = do
-    best "LRUDWA" $ \mov -> withBackup $ do
-      simulateStep mov
+    best "LRUDWA" $ \mov -> withStep mov $ do
       mb <- score
       case mb of
         Nothing -> snd <$> search (fuel - 1)

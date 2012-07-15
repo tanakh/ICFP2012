@@ -49,6 +49,7 @@ data LLState
 data LLPatch
   = LLPatch
     { pMove        :: {-# UNPACK #-} !Char
+    , pPrevResult  :: {-# UNPACK #-} !Result
     , pPrevPos     :: {-# UNPACK #-} !Pos
     , pPrevLambdas :: {-# UNPACK #-} !Int
     , pPrevRocks   :: ![Pos]

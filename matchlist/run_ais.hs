@@ -115,7 +115,7 @@ runAI aipath mappath dest basename wait waitm = do
     IO.withFile errfn IO.WriteMode $ \herr -> do
       start <- getCurrentTime
       result <- newEmptyMVar
-      (_, _, _, pid) <- P.createProcess (P.proc aipath ["-i", mappath, "-l", show wait, "-v"])
+      (_, _, _, pid) <- P.createProcess (P.proc aipath ["-i", mappath, "-t", show wait, "-v"])
         { std_out = UseHandle hout
         , std_err = UseHandle herr
         , cwd = dest

@@ -124,10 +124,9 @@ runAI aipath mappath dest basename wait waitm = do
       wth <- forkIO $ do
         putStrLn $ "waiting for " ++ basename ++ " " ++ show wait
         threadDelay ((wait + waitm) * 1000 * 1000)
-        putStrLn $ "waited for " ++ basename ++ " " ++ show wait
         P.terminateProcess pid
         killThread th
-        putStrLn $ "terminate " ++ basename ++ " " ++ show wait
+        putStr $ "terminated " ++ basename
         void $ tryPutMVar result Nothing
 
       ret <- takeMVar result

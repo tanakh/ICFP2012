@@ -10,7 +10,7 @@ import Data.Aeson.TH
 import Data.Data
 import Provider
 import qualified Ans
-import LL (simulate)
+import LL (simulate, isValidInput)
 
 data AISpec =
   AISpec
@@ -50,7 +50,7 @@ $(deriveJSON (drop 1) ''SolvedResult)
 stringProvider :: String -> Provider
 stringProvider ans mvAns mvState = do
   void $ forkIO $ blackhole mvState
-  mapM_ (putMVar mvAns) $ map Ans.Cont $ filter (`elem` "LRUDWA") ans
+  mapM_ (putMVar mvAns) $ map Ans.Cont $ filter isValidInput ans
   putMVar mvAns Ans.End
 
 calcScore :: String -> String -> IO Score

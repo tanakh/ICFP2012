@@ -24,12 +24,14 @@ function prepare_dir() {
     find smallmap/ -name "*.map" > smallmap.maplist
     find data/ -name "*.map" > data.maplist
     find $PROJECT_ROOT/ -name "ll-ai-*" -type f -perm +111 > ailist
+    ruby $MATCHDIR/rename_prog.rb ailist
     cd $MATCHDIR
 }
 
 function build_run() {
     cd $MATCHDIR
     git pull
+    git show-ref -s `git symbolic-ref HEAD`
     build
     cd results
     ../run_ais -a ailist -m smallmap.maplist -w 20 -m 10
@@ -44,7 +46,9 @@ function run() {
 }
 
 while true; do
+    echo "#### START: $(date) $(date +%s) ####"
     prepare_dir
     build_run
+    echo "#### DONE: $(date) $(date +%s) ####"
     sleep 60
 done

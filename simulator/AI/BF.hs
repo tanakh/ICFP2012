@@ -79,6 +79,8 @@ main = do
             Option.InputFile fp -> fp
             Option.Stdin -> "STDIN"
   oracle <- Oracle.new inputfn
+  when (Option.oracleSource opt/= "") $ do
+    Oracle.load oracle $ Option.oracleSource opt
 
   infiniteLoop <- liftIO $ Oracle.ask oracle "infiniteLoop" $ return False
   (if infiniteLoop then forever else id) $ do

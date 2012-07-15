@@ -29,8 +29,6 @@ defaultMain oracle theSolver = do
     Option.InputFile fn -> readFile fn
   ansMVar <- newEmptyMVar
   stateMVar <- newEmptyMVar
-  when (Option.oracleSource opt/= "") $ do
-    Oracle.load oracle $ Option.oracleSource opt
   
   myProcID <- getProcessID
   let handler = do

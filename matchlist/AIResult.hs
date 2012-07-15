@@ -17,7 +17,7 @@ data AISpec =
   { aiName :: String
   , aiPath :: FilePath
   }
-  deriving (Show, Data, Typeable)
+  deriving (Show, Data, Typeable, Ord, Eq)
 $(deriveJSON (drop 2) ''AISpec)
 
 data MapSpec =
@@ -25,7 +25,7 @@ data MapSpec =
   { mapName :: String
   , mapPath :: FilePath
   }
-  deriving (Show, Data, Typeable)
+  deriving (Show, Data, Typeable, Ord, Eq)
 $(deriveJSON (drop 3) ''MapSpec)
 
 data Score =
@@ -41,6 +41,7 @@ data SolvedResult =
   { sExitCode :: Maybe Int
   , sMapSpec :: MapSpec
   , sAISpec :: AISpec
+  , sBaseName :: String
   , sScore :: Score
   , sTimeElapsed :: Double
   }

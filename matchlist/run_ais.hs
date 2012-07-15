@@ -140,6 +140,7 @@ runAI aipath mappath dest basename wait waitm = do
       return $ SolvedResult { sExitCode = fromExitCode <$> ret
                             , sMapSpec = mapspec
                             , sAISpec = aispec
+                            , sBaseName = basename
                             , sScore = score
                             , sTimeElapsed = es
                             }

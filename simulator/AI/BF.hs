@@ -79,7 +79,9 @@ main = do
             Option.InputFile fp -> fp
             Option.Stdin -> "STDIN"
   oracle <- Oracle.new inputfn
-  forever $ do
+
+  infiniteLoop <- liftIO $ Oracle.ask oracle "infiniteLoop" $ return False
+  (if infiniteLoop then forever else id) $ do
     motionWeight <- forM "LRUD" $ \char -> do
       w <- randomRIO (0.1, 3)
       return (char, w)

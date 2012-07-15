@@ -43,10 +43,11 @@ import           Pos
 data Resource = 
   Resource {
     dijkstraMaps :: IORef (Map.Map String (Field Double)),
-    submitter :: Tejun -> IO ()
+    submitter :: Tejun -> IO (),
+    stepVisualize :: Bool
            }
 initResource :: IO Resource
-initResource = Resource <$> newIORef (Map.empty) <*> pure (\_ -> return ())
+initResource = Resource <$> newIORef (Map.empty) <*> pure (\_ -> return ()) <*> pure False
 
 getCurrentTime :: IO Int
 getCurrentTime = read . show <$> epochTime
@@ -68,7 +69,8 @@ main = do
       let res = res0{
           submitter  = \tejun ->  do
             modifyIORef tejunRef (max tejun)
-            when (Option.verbose opt) $ printe tejun
+            when (Option.verbose opt) $ printe tejun,
+          stepVisualize = (Option.verbose opt)
         }
       runLLT txt $ simpleSolver res config
       Tejun sco res rep <- readIORef tejunRef
@@ -133,19 +135,28 @@ waitOhagi opt startTime bestTejun = do
           waitOhagi opt startTime bestTejun
 
 
-isEffectiveMove :: (MonadIO m) => Char -> LLT m Bool
-isEffectiveMove hand = return True
-
+isEffectiveMove :: (Functor m, MonadIO m) => Char -> LLT m Bool
+isEffectiveMove hand = do
+  h1 <- access llHashL
+  (res,h2) <- withStep hand $ do
+    res' <- access llResultL    
+    h2'  <-access llHashL
+    return (res', h2')
+  let dies = res==Dead
+  return $ h1/=h2 && not dies
 simpleSolver :: (Functor m, MonadIO m) 
                 => Resource
                 -> Config 
                 -> LLT m Tejun
 simpleSolver resource config = do
   bd <- access llBoardL
-  validHands <- filterM isEffectiveMove "LRUD"  
+  validHands <- ('A':)<$> filterM isEffectiveMove "LRUDSW"  
+  let biasScore 'A' = -1e99
+      biasScore 'S' =  1e99
+      biasScore _   = 0
   -- dono te ga tsuyoinoka; watashi kininarimasu! 
   hyokaRef <- liftIO $ newIORef $ 
-                Map.fromList [(hand,0::Double) | hand <- validHands]
+                Map.fromList [(hand, biasScore hand) | hand <- validHands]
   let addHyoka hand val =
         liftIO $ modifyIORef hyokaRef (Map.update (Just . (val+)) hand)
   roboPos <- access llPosL
@@ -153,7 +164,8 @@ simpleSolver resource config = do
   step <- access llStepL
   let time :: Double
       time = fromIntegral step
-
+  
+  when (stepVisualize resource) showBoard                          
 
   -- treat each wind
   forM_ (windAtom config) $ \ (wave, windWave) -> do

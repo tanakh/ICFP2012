@@ -34,9 +34,7 @@
       {{#rMapResults}}
       <tr>
         <th><a class="map" href="{{mapPath}}">{{mapName}}</th>
-        {{#mapAIResults}}
-        <td class="ret-{{resultType}}"><a href="{{resultBaseName}}.out.txt">{{resultType}} {{resultScore}} <span class="time">[{{resultTimeElapsed}}sec]</span></a></td>
-        {{/mapAIResults}}
+        {{& mapResults}}
       </tr>
       {{/rMapResults}}
     </table>

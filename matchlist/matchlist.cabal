@@ -1,0 +1,52 @@
+name:                matchlist
+version:             0.1.0
+license:             BSD3
+license-file:        LICENSE
+author:              Hideyuki Tanaka
+maintainer:          tanaka.hideyuki@gmail.com
+category:            Game
+build-type:          Simple
+cabal-version:       >=1.8
+
+library
+  ghc-options:       -O3 -threaded -Wall
+  exposed-modules:   AIResult
+  build-depends:       base >= 4.5
+                     , mtl
+                     , optparse-applicative
+                     , filepath
+                     , bytestring
+                     , process
+                     , aeson
+executable run_ais
+  ghc-options:         -O3 -auto-all -threaded -Wall
+  hs-source-dirs:      dist
+  main-is:             ../run_ais.hs
+  build-depends:       base >= 4.5
+                     , matchlist
+                     , time
+                     , bytestring
+                     , aeson
+                     , filepath
+                     , system-filepath
+                     , system-fileio
+                     , process
+                     , optparse-applicative
+
+executable server
+  ghc-options:         -O3 -auto-all -threaded -Wall
+  hs-source-dirs:      dist
+  main-is:             ../server.hs
+  build-depends:       base >= 4.5
+                     , mtl
+                     , matchlist
+                     , bytestring
+                     , aeson
+                     , filepath
+                     , directory
+                     , containers
+                     , text
+                     , hastache
+                     , scotty
+                     , wai-middleware-static
+

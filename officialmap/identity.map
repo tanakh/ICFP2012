@@ -1,0 +1,21 @@
+##################################################
+#          @ @                                   #
+#         ##.##                                  #
+#           ...#            A   B      C   D     #
+#   R        ...#            . .        . .      #
+#            #...#  .##.      1          2       #
+#           #..#..###W\#     . .   ##   . .      #
+#          #L.# #.97\\\#    E   F  #!  G   H     #
+##################################################
+
+Growth   2
+Razors  0
+Trampoline A targets 2
+Trampoline B targets 1
+Trampoline C targets 2
+Trampoline D targets 1
+Trampoline E targets 7
+Trampoline F targets 1
+Trampoline G targets 2
+Trampoline H targets 9
+

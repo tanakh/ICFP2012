@@ -564,11 +564,10 @@ loopPos m = do
   foreach [ Pos x y | y <- [0..h-1], x <- [0..w-1] ] $ \pos -> do
     m pos
 
-whenInBoundPos :: (U.Unbox x, MonadIO m)
-                  => Field x -> Pos -> a -> IO a -> m a
-whenInBoundPos bd (Pos x y) def action = liftIO $ do
+whenInBoundPos :: U.Unbox x => Field x -> Pos -> a -> IO a -> IO a
+whenInBoundPos bd (Pos x y) def action = do
   let h = GM.length bd
-  w <- GM.length <$> GM.read bd 0
+  w <- GM.length <$> GM.unsafeRead bd 0
   if x >= 0 && x < w && y >= 0 && y < h
     then action
     else return def
@@ -579,15 +578,15 @@ readPos bd p = fromMaybe '#' <$> readPosM bd p
 {-# INLINEABLE readPos #-}
 
 readPosM :: (MonadPlus f, MonadIO m) => Board -> Pos -> m (f Char)
-readPosM bd p@(Pos x y) = whenInBoundPos bd p mzero $ do
-  row <- GM.read bd y
-  return <$> GM.read row x
+readPosM bd p@(Pos x y) = liftIO $ whenInBoundPos bd p mzero $ do
+  row <- GM.unsafeRead bd y
+  return <$> GM.unsafeRead row x
 {-# INLINEABLE readPosM #-}
 
 writePos :: MonadIO m => Board -> Pos -> Char -> m ()
-writePos bd p@(Pos x y) v = whenInBoundPos bd p () $ do
-  row <- GM.read bd y
-  GM.write row x v
+writePos bd p@(Pos x y) v = liftIO $ whenInBoundPos bd p () $ do
+  row <- GM.unsafeRead bd y
+  GM.unsafeWrite row x v
 {-# INLINEABLE writePos #-}
 
 searchBoard :: MonadIO m => (Char -> Bool) -> LLT m [(Pos, Char)]

@@ -154,8 +154,10 @@ dijkstra field sourceStr passableStr initVal = do
 
 
 dijkstraEX :: (MonadIO m, Functor m, Terrain a, U.Unbox a) =>
-            Field a -> String -> String ->  [(Char,a)] -> a -> LLT m ()
-dijkstraEX field sourceStr passableStr motionWeight initVal = do
+            Field a -> String -> String ->  
+            [(Char,a)] -> a -> Field a -> a -> LLT m ()
+dijkstraEX field sourceStr passableStr 
+           motionWeight earthDrug loveField initVal = do
   bd <- access llBoardL
   probes <- liftIO $ newIORef $ Q.empty
   forPos $ \ r -> do
@@ -166,6 +168,11 @@ dijkstraEX field sourceStr passableStr motionWeight initVal = do
            writeF field r unknown
         | a `elem` passableStr -> writeF field r unknown
         | otherwise            -> writeF field r blocked
+    love <- unsafeReadF loveField r
+    when (love /= 0) $ do
+          liftIO $ modifyIORef probes $ Q.insert (love, r)
+          writeF field r unknown
+          
   while (liftIO ((not . Q.null) <$> readIORef probes)) $ do
     (val, r) <- liftIO $ Q.findMin <$> readIORef probes
     liftIO $ modifyIORef probes Q.deleteMin
@@ -176,7 +183,9 @@ dijkstraEX field sourceStr passableStr motionWeight initVal = do
         let nr = r + (hand2pos char)
         newVals <- readFList field nr
         forM_ newVals $ \ _ -> do
-          liftIO $ modifyIORef probes $ Q.insert (terrainAdd w val, nr)
+          aa <- unsafeReadF bd nr
+          let w2 = if aa == '.' then w*earthDrug else w
+          liftIO $ modifyIORef probes $ Q.insert (terrainAdd w2 val, nr)
   return ()
     where
       normalize c

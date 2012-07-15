@@ -168,11 +168,14 @@ main = do
               when (placeLoveNum > 0) $ do
                 dice <- liftIO $ randomRIO (0,1)
                 when (dice < placeLoveNum /(fromIntegral $ w*h)) $ do
-                  writeF newLoveField r =<< liftIO (randomRIO (0, radius))                
+                  writeF newLoveField r =<< liftIO (randomRIO (0, placeLoveAmp * radius))                
             liftIO $ writeIORef loveFieldRef newLoveField
             return newLoveField
-            
-      dijkstraEX valueField "\\O" " .!\\R" motionWeight 0
+      razors <- access llRazorsL             
+      let passable 
+            | razors > 0 = " .!\\RWA"
+            | otherwise  = " .!\\RA"
+      dijkstraEX valueField "\\O" passable motionWeight earthDrug loveField 0
       updateF valueField (\x -> max 0 $ 75-x)
       roboPos <- access llPosL
       val <- unsafeReadF valueField roboPos

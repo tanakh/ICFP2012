@@ -173,15 +173,14 @@ simulate interactive fld bd solver = runLLT fld bd go where
         when (not interactive) $ liftIO $ putChar ch >> hFlush stdout
         simulateStep ch
 
-    end <- isEnd
-    if not end
-      then go
-      else do
-      res     <- access llResultL
-      Just sc <- score
-      replay  <- getReplay
-      when interactive $ showStatus
-      return (res, sc, replay)
+    mb <- score
+    case mb of
+      Nothing -> go
+      Just sc -> do
+        res     <- access llResultL
+        replay  <- getReplay
+        when interactive $ showStatus
+        return (res, sc, replay)
 
 -- simualte and undo
 
@@ -198,7 +197,7 @@ simulateStep mv
     let write p v = do
           c <- readPos bd p
           writePos bd p v
-          liftIO $ modifyIORef wlog $ ((p, c):)
+          when (c /= v) $ liftIO $ modifyIORef wlog $ ((p, c):)
 
     moveC mv write
     update write
@@ -219,10 +218,10 @@ moveC c = case c of
   _   -> assert False undefined
 
 move :: (MonadIO m, Functor m) => Pos -> WriteLogger m -> LLT m ()
-move d wlog = do
+move d@(Pos _ dy) wlog = do
   LLState {..} <- get
 
-  let p0@(Pos _ dy) = llPos
+  let p0 = llPos
       p1 = p0 + d
       p2 = p1 + d
 
@@ -231,13 +230,14 @@ move d wlog = do
 
   case () of
     _ | c1 `elem` " .O\\" -> do
+        -- move to empty space
         wlog p0 ' '
         wlog p1 'R'
         when (c1 == '\\') $ void $ llLambdasL += 1
         when (c1 == 'O')  $ void $ llResultL ~= Win
         void $ llPosL ~= p1
-        -- push rock
       | dy == 0 && c1 == '*' && c2 == ' ' -> do
+        -- push rock
         wlog p0 ' '
         wlog p1 'R'
         wlog p2 '*'
@@ -249,6 +249,8 @@ move d wlog = do
 update :: (Functor m, MonadIO m) => WriteLogger m -> LLT m ()
 update wlog = do
   LLState {..} <- get
+
+  bup <- readPos llBoard $ llPos + Pos 0 1
 
   -- lambda complete!
   when (llLambdas == llTotalLambdas) $ do
@@ -299,10 +301,7 @@ update wlog = do
   -- rocks must be sorted
   llRockPosL ~= sortBy (comparing $ \(Pos x y) -> (y, x)) newRocks
 
-  bup <- readPos llBoard $ llPos + Pos 0 1
-  -- write transaction
   cup <- readPos llBoard $ llPos + Pos 0 1
-
   when (bup /= '*' && cup == '*') $ do -- Totuzen no DEATH!!
     void $ llResultL ~= Dead
 
@@ -332,6 +331,7 @@ stash mv = do
 undo :: MonadIO m => LLT m ()
 undo = do
   ps <- gets llPatches
+  liftIO $ print $ length ps
   case ps of
     [] -> do
       liftIO $ putStrLn "cannot undo"
@@ -356,7 +356,7 @@ unapply st LLPatch {..} = do
     , llWaterStep = pPrevWater
 
     , llBoard = llBoard st
-    , llPatches = llPatches st
+    , llPatches = drop 1 $ llPatches st
     }
 
 -- backup and restore

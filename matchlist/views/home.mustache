@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <style type="text/css">
+      table {
+          border: 2px solid #aaa;
+          border-collapse: collapse;
+      }
+      table th {
+          border: 1px solid #ddd;
+          text-align: left;
+      }
+      .ret-Abort { background: gray; }
+      .ret-Win { background: #070; }
+      .ret-Dead { background: #c00; }
+      .ret-Unknown { background: #000; }
+      a:link, a:hover, a:visited { color: #fff; text-decoration: none; }
+      a.map { color: black; }
+      .time { color: #aaa; }
+    </style>
+    <script type="text/javascript" src="http://maps.google.com/maps/api/js?sensor=true"></script>
+    <title>Results</title>
+  </head>
+  <body>
+    <h1>Match Results</h1>
+    <table id="matchResults">
+      <tr>
+        <th></th>
+        {{#rAINames}}
+        <th>{{}}</th>
+        {{/rAINames}}
+      </tr>
+      {{#rMapResults}}
+      <tr>
+        <th><a class="map" href="{{mapPath}}">{{mapName}}</th>
+        {{#mapAIResults}}
+        <td class="ret-{{resultType}}"><a href="{{resultBaseName}}.out.txt">{{resultType}} {{resultScore}} <span class="time">[{{resultTimeElapsed}}sec]</span></a></td>
+        {{/mapAIResults}}
+      </tr>
+      {{/rMapResults}}
+    </table>
+  </body>
+</html>

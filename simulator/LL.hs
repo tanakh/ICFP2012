@@ -254,6 +254,7 @@ withStep mv m = do
   ret <- m
   undo
   return ret
+{-# INLINEABLE withStep #-}
 
 simulateStep :: (Functor m, MonadIO m) => Char -> LLT m ()
 simulateStep mv = do

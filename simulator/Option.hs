@@ -63,6 +63,7 @@ parse = Option
           long "timeout"
           & short 't'
           & transform read
+          & value 158
           & help "Timeout before submitting the best answer")
   where
     fa str = case str of

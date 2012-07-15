@@ -2,6 +2,7 @@
 module Main(main) where
 
 import Control.Applicative
+import Control.Concurrent.STM
 import Control.Monad
 import Control.Monad.Trans.Loop
 import Control.Monad.Trans
@@ -20,6 +21,7 @@ import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Generic.Mutable as GM
 import System.IO
 import System.Process
+import System.Posix.Time
 import System.Posix.Unistd
 import System.Random
 import System.FilePath
@@ -27,10 +29,10 @@ import Text.Printf
 
 import           AI.Common
 import           AI.GorinNoSho
-import qualified Ans as Ans
+import qualified Ans
 import           DefaultMain
 import           LL
-import qualified Option as Opt
+import qualified Option
 import           Pos
 
 newtype Wave =
@@ -62,12 +64,6 @@ data Config =
          Wave -- direction
         )]
   } deriving (Eq, Show, Read)
-
-main :: IO ()
-main = do
-  smellRef <- newIORef Nothing
-  config <- randomConfig
-  defaultMain $ simpleSolver smellRef $ config
 
 randomConfig :: IO Config
 randomConfig =
@@ -118,7 +114,67 @@ randomMany num m = do
                 else return []
   return $ x:xs
 
+data Resource =
+  Resource {
+    dijkstraMaps :: IORef (Map.Map String (Field Double)),
+    submitter :: (Result, String) -> IO ()
+           }
+initResource :: IO Resource
+initResource = Resource <$> newIORef (Map.empty) <*> pure (\_ -> return ())
 
+getCurrentTime :: IO Int
+getCurrentTime = read . show <$> epochTime
+
+main :: IO ()
+main = do
+  startTime <- getCurrentTime
+  opt <- Option.parseIO
+  txt <- case Option.input opt of
+    Option.Stdin -> getContents
+    Option.InputFile fn -> readFile fn
+  let (txtB,txtM) = span (/="") $ lines txt
+      bd0 = reverse txtB
+      w = maximum $ map length bd0
+      bd = map (take w . (++ repeat ' ')) bd0
+      fld = Flood.readFlood $ drop 1 txtM
+  case Option.mode opt of
+    Option.Ninja -> ninjaMain opt startTime  fld bd
+    Option.Survey -> do
+      res <- initResource
+      config <- randomConfig
+
+      res <- runLLT fld bd $ simpleSolver res config
+      let fnInput = case Option.input opt of
+            Option.InputFile fp -> fp
+            Option.Stdin -> "STDIN"
+          fnRec = (printf "record/%s-%d-%s.txt"
+                (dropExtension $ takeFileName fnInput)
+                (scoreResult res)
+                (take 6 $ show $ md5 $ L.pack $ show config))
+      hPutStrLn stderr fnRec
+      liftIO $ system "mkdir -p record/"
+      liftIO $ writeFile fnRec $
+        unlines $
+          [show $ scoreResult res,
+           show $ res,
+           show $ config
+          ]
+
+ninjaMain :: Option.Option -> Int -> Flood.Flood -> [String] -> IO ()
+ninjaMain opt startTime fld bd = do
+  submitQ <- newTQueueIO
+  replicateM_ 100 $ do
+    res0 <- initResource
+    let res = res0 { submitter = \x -> atomically $ writeTQueue submitQ x}
+    return ()
+  waitOhagi opt startTime
+
+waitOhagi opt startTime = do
+  t <- getCurrentTime
+  when (t > startTime + Option.timeout opt) $ do
+    return ()
+  sleep 1
+  waitOhagi opt startTime
 
 
 isEffectiveMove :: (MonadIO m) => Char -> LLT m Bool

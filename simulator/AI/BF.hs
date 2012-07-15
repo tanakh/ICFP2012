@@ -65,6 +65,9 @@ main = do
     updateF valueField (75-)
     hmr <- liftIO $ newIORef HM.empty
     (mov, sc) <- withBackup $ search valueField hmr 10
+
+    (liftIO . Oracle.submit oracle) =<< getAbortTejun
+
     liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++ [mov]
     return $ Ans.Cont mov
 

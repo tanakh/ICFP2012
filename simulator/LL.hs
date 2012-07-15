@@ -590,8 +590,15 @@ whenInBoundPos bd (Pos x y) def action = do
 {-# INLINEABLE whenInBoundPos #-}
 
 readPos :: Board -> Pos -> IO Char
-readPos bd p = whenInBoundPos bd p '#' return
-{-# INLINEABLE readPos #-}
+readPos bd (Pos x y) = do
+  if y >= 0 && y < GM.length bd
+    then do
+    row <- GM.unsafeRead bd y
+    if x >= 0 && x < GM.length row
+      then GM.unsafeRead row x
+      else return '#'
+    else return '#'
+{-# INLINE readPos #-}
 
 readPosM :: MonadPlus f => Board -> Pos -> IO (f Char)
 readPosM bd p = whenInBoundPos bd p mzero $ return . return

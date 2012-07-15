@@ -12,7 +12,6 @@ import qualified System.IO as IO
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Lazy.Char8 as BL8
 import Data.Time.Clock
-import Data.Char
 
 import Control.Concurrent
 import Control.Monad
@@ -23,7 +22,8 @@ data Option =
   Option { maplist :: FilePath
          , ailist  :: FilePath
          , destdir :: Maybe FilePath
-         , limittime :: Int
+         , waittime :: Int
+         , waitmore :: Int
          }
 
 parseIO :: IO Option
@@ -52,19 +52,26 @@ parse = Option
           & value Nothing
           & help "dest" )
         <*> strOption (
-          long "limit"
-          & short 'l'
+          long "wait"
+          & short 'w'
           & transform read
           & value 150
-          & help "dest" )
+          & help "waittime" )
+        <*> strOption (
+          long "waitmore"
+          & short 'm'
+          & transform read
+          & value 10
+          & help "kill if (wait + waitmore) exceeds" )
 
 updateAI :: FilePath
          -> FilePath
          -> Maybe FilePath
          -> FilePath
          -> Int
+         -> Int
          -> IO ()
-updateAI aipath mappath dest basename wait = do
+updateAI aipath mappath dest basename wait waitm = do
   exist <- FS.isFile rfpath
   if exist
     then do
@@ -76,7 +83,7 @@ updateAI aipath mappath dest basename wait = do
   where
     run = do
       putStrLn basename
-      result <- runAI aipath mappath dest basename wait
+      result <- runAI aipath mappath dest basename wait waitm
       BL8.writeFile resultFile $ A.encode $ A.toJSON result
     resultFile = basename ++ ".result"
     rfpath = FP.decodeString resultFile
@@ -93,19 +100,22 @@ runAI :: FilePath
       -> Maybe FilePath
       -> FilePath
       -> Int
-      -> IO Result
-runAI aipath mappath dest basename wait = do
+      -> Int
+      -> IO SolvedResult
+runAI aipath mappath dest basename wait waitm = do
   let errfn = basename ++ ".err.txt"
       outfn = basename ++ ".out.txt"
-      ainame = 
+      aname = FilePath.takeBaseName aipath
+      mname = FilePath.takeBaseName mappath
       aispec = AISpec aname aipath
       mapspec = MapSpec mname mappath
 
+  mapdata <- IO.readFile mappath
   IO.withFile outfn IO.WriteMode $ \hout ->
     IO.withFile errfn IO.WriteMode $ \herr -> do
       start <- getCurrentTime
       result <- newEmptyMVar
-      (_, _, _, pid) <- P.createProcess (P.proc aipath ["-i", mappath, "-v"])
+      (_, _, _, pid) <- P.createProcess (P.proc aipath ["-i", mappath, "-l", show wait, "-v"])
         { std_out = UseHandle hout
         , std_err = UseHandle herr
         , cwd = dest
@@ -113,7 +123,7 @@ runAI aipath mappath dest basename wait = do
       th <- forkIO $ P.waitForProcess pid >>= putMVar result . Just
       wth <- forkIO $ do
         putStrLn $ "waiting for " ++ basename ++ " " ++ show wait
-        threadDelay (wait * 1000 * 1000)
+        threadDelay ((wait + waitm) * 1000 * 1000)
         putStrLn $ "waited for " ++ basename ++ " " ++ show wait
         P.terminateProcess pid
         killThread th
@@ -134,14 +144,6 @@ runAI aipath mappath dest basename wait = do
                             , sScore = score
                             , sTimeElapsed = es
                             }
-                      --       , resuAIPath = aipath
-                      -- , resultAIName = FilePath.takeFileName aipath
-                      -- , resultBaseName = basename
-                      -- , resultType = rtype
-                      -- , resultScore = score
-                      -- , resultMapPath = mappath
-                      -- , resultTimeElapsed = es
-                      }
 
   where
     fromExitCode ExitSuccess = 0
@@ -157,4 +159,4 @@ main = do
     forM_ ais $ \ai -> do
       let ainame = FilePath.takeBaseName ai
           basename = ainame ++ "_" ++ mapname
-      updateAI ai m (destdir opt) basename (limittime opt)
+      updateAI ai m (destdir opt) basename (waittime opt) (waitmore opt)

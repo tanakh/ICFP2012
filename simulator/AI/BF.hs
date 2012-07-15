@@ -215,7 +215,6 @@ main = do
         useHyperHistory <- Oracle.ask oracle "useHyperHistory" $ return False
         when (useHyperHistory) $ modifyHistory hyperHistory hashNow (1+)
 
-      printe yomiDepth
       (mov, sc) <- withBackup $ do
         simplify (Option.verbose opt)
         rs <- forM moves $ \mov -> do

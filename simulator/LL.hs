@@ -26,6 +26,9 @@ module LL (
   -- diagnostic
   showStatus, showBoard,
 
+  -- varidate inputs
+  validInputs, isValidInput
+
   module State,
   ) where
 
@@ -469,3 +472,9 @@ writePos bd p@(Pos x y) v = whenInBoundPos bd p () $ do
   row <- GM.read bd y
   GM.write row x v
 {-# INLINEABLE writePos #-}
+
+validInputs :: [Char]
+validInputs = "LRUDWA"
+
+isValidInput :: Char -> Bool
+isValidInput = (`elem` validInputs)

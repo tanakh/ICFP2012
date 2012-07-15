@@ -75,7 +75,6 @@ evaluateHand depth hand
         Win n -> return $ WinGame (-n)
         Abort n -> return $ AbortGame (-n)
         Dead n -> return $ DeadGame (-n)
-        Skip -> return $ DeadGame 99999999
         Cont ->
           head . sort <$> mapM (evaluateHand (depth-1)) "LRUDA"
 

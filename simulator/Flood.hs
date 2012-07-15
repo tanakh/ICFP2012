@@ -6,6 +6,7 @@ module Flood
 
 data Flood = Flood { water :: Int, flooding :: Int, waterproof :: Int }
 
+defaultFlood :: Flood
 defaultFlood = Flood 0 0 10
 
 waterLevel :: Int -> Flood -> Int
@@ -20,7 +21,7 @@ readFlood = foldr upd defaultFlood . map r where
             val = read sval :: Int
         in (name, val)
 
+upd :: (String, Int) -> Flood -> Flood
 upd ("Water", n) x = x { water = n }
 upd ("Flooding", n) x = x { flooding = n }
 upd ("Waterproof", n) x = x { waterproof = n }
-

@@ -184,14 +184,19 @@ main = do
       w <- randomRIO (0.3, 2.0) -- !!!!!!!
       return (char, w)
     history <- newIORef HM.empty
-    
     earthDrugAmp <- liftIO $ Oracle.ask oracle "earthDrugAmp" $ return (0.0::Double)
     earthDrug <- exp <$> randomRIO (- earthDrugAmp, earthDrugAmp)
     itemLoveAmp <- liftIO $ Oracle.ask oracle "itemLoveAmp" $ return (0.0:: Double)
     placeLoveAmp <- liftIO $ Oracle.ask oracle "placeLoveAmp" $ return (0.0:: Double)
     placeLoveNum <- liftIO $ Oracle.ask oracle "placeLoveNum" $ return (0.0:: Double)
     tetete@(Tejun osco _ _ ) <- atomically $ readTVar (Oracle.tejunVar oracle)
-    liftIO $ modifyIORef yomiRef (\x -> (if osco <= 10 && x <= 10 then (2+x) else (1+x)) )
+
+    initYomi <- liftIO $ Oracle.ask oracle "initBFDepth" $ return (1::Int)
+    let updateYomi x
+         | x < 0                  =  initYomi
+         | osco <= 10 && x <= 10  =  2+x 
+         | otherwise              =  1+x
+    liftIO $ modifyIORef yomiRef (updateYomi)
     yomi <- liftIO $ readIORef yomiRef
     --- start of One Challenge
     defaultMain txt oracle $ do
@@ -200,7 +205,6 @@ main = do
 
       (w,h) <- getSize
       yomiDepth <- liftIO $ readIORef yomiRef
-      bfDepth <- liftIO $ Oracle.ask oracle "bfDepth" $ return yomiDepth
       hmr <- liftIO $ newIORef HM.empty
 
       hashNow <- access llHashL
@@ -211,6 +215,7 @@ main = do
         useHyperHistory <- Oracle.ask oracle "useHyperHistory" $ return False
         when (useHyperHistory) $ modifyHistory hyperHistory hashNow (1+)
 
+      printe yomiDepth
       (mov, sc) <- withBackup $ do
         simplify (Option.verbose opt)
         rs <- forM moves $ \mov -> do
@@ -222,7 +227,7 @@ main = do
               next <- get
               c <- pruning cur mov next
               if c
-                then (mov, ) <$> eval undefined hmr 0 (bfDepth * 10)
+                then (mov, ) <$> eval undefined hmr 0 (yomiDepth * 10)
                 else return (mov, minf)
             else return (mov, minf)
         when (Option.verbose opt) $ do

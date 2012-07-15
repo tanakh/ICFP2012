@@ -377,13 +377,14 @@ update wlog commit = do
 
   let growing = llStep `mod` llGrowth == llGrowth - 1
 
-  cands <-
+  cands <- {-# SCC "update/generateCands" #-}
     if not growing then return llRockPos
     else sortp . (llRockPos ++) . map fst <$> searchBoard (=='W')
 
   dior <- liftIO $ newIORef False
+  rrocks <- liftIO $ newIORef []
 
-  newRocks <- liftIO $ forM cands $ \ !p -> do
+  {-# SCC "update/updateRock" #-} liftIO $ forM_ cands $ \ !p -> do
     -- la [ca] ra
     -- lb  cb  rb
     -- lc  cc  rc
@@ -412,35 +413,39 @@ update wlog commit = do
             forM_ adjacent $ \((pca+) -> pw) -> do
               !cell <- readPos llBoard pw
               when (cell == ' ') $ wlog pw 'W'
-            return pca
+            modifyIORef rrocks (pca:)
 
         | isRock ca &&
           cb == ' ' -> do
+            let rr = if ca == '@' && cc /= ' ' then '\\' else ca
             wlog pca ' '
-            wlog pcb $ if ca == '@' && cc /= ' ' then '\\' else ca
+            wlog pcb rr
             when (cc == 'R') $ writeIORef dior True
-            return pcb
+            when (isRock rr) $ modifyIORef rrocks (pcb:)
         | isRock ca && ra == ' ' &&
           isRock cb && rb == ' ' -> do
+            let rr = if ca == '@' && rc /= ' ' then '\\' else ca
             wlog pca ' '
-            wlog prb $ if ca == '@' && rc /= ' ' then '\\' else ca
+            wlog prb rr
             when (rc == 'R') $ writeIORef dior True
-            return prb
+            when (isRock rr) $ modifyIORef rrocks (prb:)
         | la == ' ' && isRock ca &&
           lb == ' ' && isRock cb -> do
+            let rr = if ca == '@' && lc /= ' ' then '\\' else ca
             wlog pca ' '
-            wlog plb $ if ca == '@' && lc /= ' ' then '\\' else ca
+            wlog plb rr
             when (lc == 'R') $ writeIORef dior True
-            return plb
+            when (isRock rr) $ modifyIORef rrocks (plb:)
         | isRock ca  && ra == ' ' &&
           cb == '\\' && rb == ' ' -> do
+            let rr = if ca == '@' && rc /= ' ' then '\\' else ca
             wlog pca ' '
-            wlog prb $ if ca == '@' && rc /= ' ' then '\\' else ca
+            wlog prb rr
             when (rc == 'R') $ writeIORef dior True
-            return prb
+            when (isRock rr) $ modifyIORef rrocks (prb:)
 
       _ ->
-        return pca
+        when (ca == '*') $ modifyIORef rrocks (pca:)
 
   -- lambda complete!
   liftIO $ when (llLambdas == llTotalLambdas) $ do
@@ -450,11 +455,12 @@ update wlog commit = do
   liftIO commit
 
   -- sanitize rocks' pos
-  newRocks' <- liftIO $
-    filterM (\p -> isRock <$> readPos llBoard p) newRocks
+  -- newRocks' <- {-# SCC "update/sanitize" #-} liftIO $
+  --   filterM (\p -> isRock <$> readPos llBoard p) newRocks
 
   -- rocks must be sorted
-  llRockPosL ~= sortp newRocks'
+  newRocks <- liftIO $ readIORef rrocks
+  llRockPosL ~= sortp newRocks
 
   cup <- liftIO $ readPos llBoard $ llPos + Pos 0 1
   dead <- liftIO $ readIORef dior

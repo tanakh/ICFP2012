@@ -79,7 +79,6 @@ main = do
             Option.InputFile fp -> fp
             Option.Stdin -> "STDIN"
   oracle <- Oracle.new inputfn
-<<<<<<< HEAD
   forever $ do
     motionWeight <- forM "LRUD" $ \char -> do
       w <- randomRIO (0.1, 3)
@@ -138,72 +137,7 @@ main = do
       when (Option.verbose opt) $ liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++  [mov,mov2]
       return $ Ans.Cont mov3
   
-=======
-  defaultMain oracle $ do
-    step <- access llStepL
-    (liftIO . Oracle.submit oracle) =<< getAbortTejun
 
-    bfDepth <- liftIO $ Oracle.ask oracle "bfDepth" $ return 10
-    hmr <- liftIO $ newIORef HM.empty
-    hashNow <- access llHashL
-    
-    kabutta <- liftIO $ do
-           modifyIORef hashLogRef (hashNow:)
-           xs <- readIORef hashLogRef
-           return $ (length (take 3 xs) >= 3) && ((1==) $length $ nub $take 3 xs)
-    liftIO $ modifyIORef historyRef $ HS.insert hashNow
-    history <- liftIO $ readIORef historyRef
-
-
-    (mov, sc) <- withBackup $ do
-      rs <- forM moves $ \mov -> do
-        cur <- get
-        b <- prePruning cur mov
-        if b
-          then do
-          withStep mov $ do
-            next <- get
-            c <- pruning cur mov next
-            if c
-              then (mov, ) <$> eval undefined hmr 0 bfDepth
-              else return (mov, minf)
-          else return (mov, minf)
-      return $ maximumBy (comparing snd) rs
-
-    greedyDepth <- liftIO $ Oracle.ask oracle "greedyDepth" $ return 4
-    valueField <- if step > 0 then liftIO $ readIORef valueFieldRef
-                              else do
-                                  ret <- newF (0::Int)
-                                  liftIO $ writeIORef valueFieldRef ret
-                                  return ret
-    dijkstra valueField "\\O" " .!\\R" 0
-    updateF valueField (\x -> max 0 $ 75-x)
-    roboPos <- access llPosL
-    val <- unsafeReadF valueField roboPos
-    (mov2, confidence) <-  do
-             cand <- forM "LRUD" $ \hand -> do
-                   val3 <- unsafeReadF valueField $ roboPos + hand2pos hand
-                   flag <- safetyCheck history greedyDepth hand
-                   return ((flag,val3), hand)
-             let top = last $ sort $ cand
-             return $ (snd top {-move-}, fst (fst top) {-whether it was safe-})
-
-    combineBFFirst <- liftIO $ Oracle.ask oracle "combineBFFirst" $ return True
-    perfectGreedy <- liftIO $ Oracle.ask oracle "perfectGreedy" $ return False
-    movRand <- liftIO $ choose "RLDU"
-    let mov3
-         | kabutta                                    = movRand
-         | perfectGreedy                              = mov2
-         | combineBFFirst && (mov /= 'A' || val <= 0) = mov
-         | combineBFFirst                             = mov2
-         | not (combineBFFirst) && confidence         = mov2
-         | otherwise                                  = mov
-
-    when (Option.verbose opt) $
-      liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++  [mov,mov2]
-    return $ Ans.Cont mov3
-
->>>>>>> 8b7965574de42f3260cb6f446bc7459bbd4ff1d5
 prePruning :: LLState -> Char -> LL Bool
 prePruning LLState {..} move
   | move == 'S' && llRazors == 0 =

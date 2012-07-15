@@ -24,7 +24,7 @@ safetynet m = do
   withBackup $ do
     ret <- m
     case ret of
-      Ans.Cont ch -> if ch `elem` "LRUDWA"
+      Ans.Cont ch -> if isValidInput ch
                      then return ret
                      else do
                        liftIO $ hPutStrLn stderr $

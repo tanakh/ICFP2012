@@ -104,8 +104,8 @@ class (Eq a, Ord a, Num a) => Terrain a where
   terrainSucc x = if isPassable x then x+1 else x
 
 instance Terrain Int where
-  unknown = minBound-2
-  blocked = minBound-1
+  unknown = maxBound-2
+  blocked = maxBound-1
 instance Terrain Double where
   unknown = 8901e35
   blocked = 1341e72

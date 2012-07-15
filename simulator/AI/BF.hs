@@ -108,16 +108,16 @@ main = do
 
   infiniteLoop <- liftIO $ Oracle.ask oracle "infiniteLoop" $ return False
   (if infiniteLoop then forever else id) $ do
-    -- randomize approach
+    -- generate randomize parameters
     motionWeight <- forM "LRUD" $ \char -> do
       w <- randomRIO (0.1, 3)
       return (char, w)
     history <- newIORef HM.empty
-    
 
     earthDrugAmp <- liftIO $ Oracle.ask oracle "earthDrugAmp" $ return (0.0::Double)
     earthDrug <- exp <$> randomRIO (- earthDrugAmp, earthDrugAmp) 
     itemLoveAmp <- liftIO $ Oracle.ask oracle "itemLoveAmp" $ return (0.0:: Double)
+    placeLoveAmp <- liftIO $ Oracle.ask oracle "placeLoveAmp" $ return (0.0:: Double)
     placeLoveNum <- liftIO $ Oracle.ask oracle "placeLoveNum" $ return (0.0:: Double)
     
 
@@ -165,9 +165,13 @@ main = do
               a <- unsafeReadF bd r
               when (a `elem` "ABCDEFGHI!" && itemLoveAmp > 0) $ 
                 writeF newLoveField r =<< liftIO (randomRIO (0, itemLoveAmp * radius))
+              when (placeLoveNum > 0) $ do
+                dice <- liftIO $ randomRIO (0,1)
+                when (dice < placeLoveNum /(fromIntegral $ w*h)) $ do
+                  writeF newLoveField r =<< liftIO (randomRIO (0, radius))                
             liftIO $ writeIORef loveFieldRef newLoveField
             return newLoveField
-
+            
       dijkstraEX valueField "\\O" " .!\\R" motionWeight 0
       updateF valueField (\x -> max 0 $ 75-x)
       roboPos <- access llPosL

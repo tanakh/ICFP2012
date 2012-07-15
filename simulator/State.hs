@@ -18,7 +18,7 @@ data Result
   | Abort
   | Dead
   | Cont
-  deriving (Show, Eq)
+  deriving (Show, Eq, Ord,Read)
 
 data LLState
   = LLState

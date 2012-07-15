@@ -266,27 +266,27 @@ simulateStep mv = do
     return ()
 
     else do
-    wlog <- liftIO $ newIORef []
-    xlog <- liftIO $ newIORef []
-    rlog <- liftIO $ newIORef []
     bd <- access llBoardL
+
+    wlog <- liftIO $ newIORef []
+    rlog <- liftIO $ newIORef []
+    xlog <- liftIO $ newIORef 0
 
     let write p v = do
           c <- readPos bd p
           modifyIORef rlog $ ((p, c):)
           modifyIORef wlog $ ((p, v):)
+          modifyIORef xlog (`xor` (hashChar p v `xor` hashChar p c))
         commit = do
           wl <- readIORef wlog
           forM_ (reverse wl) $ \(p, v) -> writePos bd p v
-          modifyIORef xlog $ (wl++)
           writeIORef wlog []
 
     moveC mv write >> liftIO commit
     update write commit
 
     diff <- liftIO $ readIORef rlog
-    eiff <- liftIO $ readIORef xlog
-    let hash = foldl' xor 0 $ map (\(p, c) -> hashChar p c) $ diff ++ eiff
+    hash <- liftIO $ readIORef xlog
     llHashL %= xor hash
     llPatchesL %= \(p:ps) -> (p { pBoardDiff = diff, pHash = hash }:ps)
     return ()

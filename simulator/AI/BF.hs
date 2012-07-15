@@ -93,7 +93,6 @@ goodnessCheck hist fuel hand
 main :: IO ()
 main = do
   opt <- Option.parseIO
-  history <- newIORef HM.empty
   valueFieldRef <- newIORef undefined
   let inputfn = case Option.input opt of
             Option.InputFile fp -> fp
@@ -107,6 +106,8 @@ main = do
     motionWeight <- forM "LRUD" $ \char -> do
       w <- randomRIO (0.1, 3)
       return (char, w)
+    history <- newIORef HM.empty
+    --- start of One Challenge
     defaultMain oracle $ do
       step <- access llStepL
       (liftIO . Oracle.submit oracle) =<< getAbortTejun

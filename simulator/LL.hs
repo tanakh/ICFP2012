@@ -88,7 +88,7 @@ winScore = do
 abortScore = do
   step <- access llStepL
   lms <- access llLambdasL
-  return (lms * 50 - step)
+  return (lms * 50 - step + 1)
 
 deadScore = do
   step <- access llStepL
@@ -228,14 +228,15 @@ simulate interactive txt solver = runLLT txt go where
 -- simualte and undo
 
 simulateStep :: (Functor m, MonadIO m) => Char -> LLT m ()
-simulateStep mv
-  | mv == 'A' = do -- abort process immediately
-    stash 'A'
-    llStepL += 1
+simulateStep mv = do
+  stash mv
+
+  if mv == 'A'
+    then do
     llResultL ~= Abort
     return ()
-  | otherwise = do
-    stash mv
+
+    else do
     wlog <- liftIO $ newIORef []
     rlog <- liftIO $ newIORef []
     bd <- access llBoardL
@@ -255,6 +256,9 @@ simulateStep mv
     diff <- liftIO $ readIORef rlog
     void $ llPatchesL %= \(p:ps) -> (p { pBoardDiff = diff }:ps)
 
+  llStepL += 1
+  return ()
+
 type WriteLogger m = Pos -> Char -> LLT m ()
 type Commit m = LLT m ()
 
@@ -266,7 +270,6 @@ moveC c = case c of
   'D' -> move $ Pos 0    (-1)
   'S' -> shave
   'W' -> \_ -> return ()
-  'A' -> \_ -> return ()
   _   -> assert False undefined
 
 isRock :: Char -> Bool
@@ -430,9 +433,6 @@ update wlog commit = do
   when (ws > Flood.waterproof llFlood) $ do
     void $ llResultL ~= Dead
 
-  -- finally, incr step
-  llStepL += 1
-
   return ()
 
 -- patch utils
@@ -484,7 +484,7 @@ unapply st LLPatch {..} = do
     , llRazors    = pPrevRazors
 
     , llBoard = llBoard st
-    , llPatches = drop 1 $ llPatches st
+    , llPatches = tail $ llPatches st
     }
 
 -- backup and restore

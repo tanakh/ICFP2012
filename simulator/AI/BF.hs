@@ -19,7 +19,7 @@ main = defaultMain bf
 
 bf :: Solver IO
 bf = do
-  (mov, sc) <- search 6
+  (mov, sc) <- withBackup $ search 2
   liftIO $ hPutStrLn stderr $ "score : " ++ show sc ++ ", move: " ++ [mov]
   return $ Ans.Cont mov
 
@@ -35,7 +35,8 @@ search fuel
   | fuel <= 0 =
     (undefined,) <$> staticScore
   | otherwise = do
-    best "LRUDWA" $ \mov -> withStep mov $ do
+    showStatus
+    best "LRUDSWA" $ \mov -> withStep mov $ do
       mb <- score
       case mb of
         Nothing -> snd <$> search (fuel - 1)

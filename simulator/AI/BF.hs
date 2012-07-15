@@ -276,6 +276,7 @@ main = do
 
 
 
+
 prePruning :: LLState -> Char -> LL Bool
 prePruning LLState {..} move
   | move == 'S' && llRazors == 0 =

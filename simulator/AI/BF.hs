@@ -155,6 +155,9 @@ simplify verboseSwitch = do
 main :: IO ()
 main = do
   opt <- Option.parseIO
+  txt <- case Option.input opt of
+    Option.Stdin -> getContents
+    Option.InputFile fn -> readFile fn
   historyRef <- newIORef HS.empty
   valueFieldRef <- newIORef undefined
   loveFieldRef <- newIORef undefined
@@ -186,7 +189,7 @@ main = do
     placeLoveNum <- liftIO $ Oracle.ask oracle "placeLoveNum" $ return (0.0:: Double)
     liftIO $ modifyIORef yomiRef (1+)
     --- start of One Challenge
-    defaultMain oracle $ do
+    defaultMain txt oracle $ do
       step <- access llStepL
       (liftIO . Oracle.submit oracle) =<< getAbortTejun
 

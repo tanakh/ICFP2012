@@ -52,7 +52,7 @@ executable ll-simulator
   main-is:             ../main.hs
   build-depends:       base ==4.5.*
                      , simulator
-
+  buildable:           False
 executable ll-ai-simple
   ghc-options:         -O
   hs-source-dirs:      dist
@@ -101,7 +101,7 @@ executable ll-ai-cf
   build-depends:       base ==4.5.*, simulator
                      , vector, data-lens-fd, mtl, control-monad-loop, stm
                      , unordered-containers, random, unix
-  buildable:           True
+  buildable:           False
 
 executable ll-ai-babayaga
   ghc-options:         -O2

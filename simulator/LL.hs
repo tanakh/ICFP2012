@@ -1,25 +1,30 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses, UndecidableInstances #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module LL (
-  LLT, runLLT,
-  Solver,
-
+  -- simulate whole game
   simulate,
+
+  -- the LLT monad
+  LLT, runLLT,
+  Solver, Result(..),
+
+  -- exec step, and undo
   simulateStep, undo,
-  move, moveC,
+  score, abortScore, deadScore, winScore,
 
+  -- aux
   getSize,
-
   forPos, loopPos,
-
   whenInBoundPos,
   readPos, readPosM, writePos,
 
-  backupState, withBackup,
-  showStatus, showBoard,
+  -- full backup, and restore (maybe heave...)
+  backupState, restoreState, withBackup,
 
-  scoreResult, abortScore, deathScore, winScore,
+  -- diagnostic
+  showStatus, showBoard,
 
   module State,
   ) where
@@ -30,26 +35,22 @@ import Control.Monad
 import Control.Monad.Error
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Loop
-import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Digest.Pure.MD5
 import Data.IORef
 import Data.Lens
+import Data.List
 import Data.Maybe
 import Data.Ord
 import qualified Data.Vector as V
-import qualified Data.Vector.Algorithms.Intro as Intro
 import qualified Data.Vector.Mutable as VM
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Unboxed.Mutable as UM
 import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Generic.Mutable as GM
-import System.FilePath
-import System.Process
 import System.IO
 import Text.Printf
 
 import qualified Ans
-import qualified Option
 import qualified Flood
 import Pos
 import State
@@ -60,90 +61,23 @@ newtype LLT m a
            , Monad, MonadIO
            , MonadState LLState, MonadTrans)
 
-backupState :: MonadIO m => LLT m LLState
-backupState = do
-  bd <- access llBoardL
-  nbd <- liftIO $ V.unsafeThaw =<< V.mapM UM.clone =<< V.unsafeFreeze bd
-  rocks <- access llRockPosL
-  nrocks <- liftIO $ VM.clone rocks
-  st <- get
-  return $ st { llBoard = nbd, llRockPos = nrocks}
+type Solver m = LLT m Ans.Ans
 
-withBackup :: MonadIO m => LLT m a -> LLT m a
-withBackup m = do
-  st <- backupState
-  ret <- m
-  put st
-  return ret
+isEnd :: Monad m => LLT m Bool
+isEnd = do
+  res <- access llResultL
+  return $ res /= Cont
 
-runLLT :: MonadIO m => Flood.Flood -> [String] -> LLT m a -> m a
-runLLT fld bdl m = do
-  let h = length bdl
-      w = length $ head bdl
-  bd <- liftIO $ V.thaw . V.fromList =<< mapM (U.thaw . U.fromList) bdl
+score :: MonadIO m => LLT m (Maybe Int)
+score = do
+  res <- access llResultL
+  case res of
+    Win   -> return . Just =<< winScore
+    Abort -> return . Just =<< abortScore
+    Dead  -> return . Just =<< deadScore
+    Cont  -> return Nothing
 
-  (cx, cy) <- iterateLoopT 0 $ \y -> do
-    iterateLoopT 0 $ \x -> do
-      when (x >= w) exit
-      c <- readPos bd $ Pos x y
-      when (c == 'R') $ lift $ exitWith (x, y)
-      return $ x+1
-    return $ y+1
-
-  (cxLift, cyLift) <- iterateLoopT 0 $ \y -> do
-    iterateLoopT 0 $ \x -> do
-      when (x >= w) exit
-      c <- readPos bd $ Pos x y
-      when (c == 'L') $ lift $ exitWith (x, y)
-      return $ x+1
-    return $ y+1
-
-  lambdaNum <- liftIO $ do
-    ior <- newIORef 0
-    forM_ [0..h-1] $ \y -> do
-      forM_ [0..w-1] $ \x -> do
-        c <- readPos bd $ Pos x y
-        when (c == '\\') $ modifyIORef ior (+1)
-    readIORef ior
-
-  rocks <- liftIO $ do
-    rr <- newIORef []
-    forM_ [0..h-1] $ \y -> do
-      forM_ [0..w-1] $ \x -> do
-        c <- readPos bd $ Pos x y
-        when (c == '*') $ modifyIORef rr (Pos x y:)
-    reverse <$> readIORef rr
-  vrocks <- liftIO $ V.thaw $ V.fromList rocks
-
-  let initState = LLState
-        { llStep = 0
-        , llLambdas = 0
-        , llTotalLambdas = lambdaNum
-        , llPos = Pos cx cy
-        , llLiftPos = Pos cxLift cyLift
-        , llRockPos = vrocks
-        , llBoard = bd
-        , llFlood = fld
-        , llWaterStep = 0
-        , llHist = []
-        , llReplay = []
-        }
-  evalStateT (unLLT m) initState
-
-data Result
-  = Win Int
-  | Abort Int
-  | Dead Int
-  | Cont
-  deriving (Show)
-
-scoreResult :: Result -> Int
-scoreResult (Win n) = n
-scoreResult (Abort n) = n
-scoreResult (Dead n) = n
-scoreResult _ = assert False undefined
-
-winScore, abortScore, deathScore :: MonadIO m => LLT m Int
+winScore, abortScore, deadScore :: MonadIO m => LLT m Int
 winScore = do
   step <- access llStepL
   lms <- access llLambdasL
@@ -154,246 +88,294 @@ abortScore = do
   lms <- access llLambdasL
   return (lms * 50 - step)
 
-deathScore = do
+deadScore = do
   step <- access llStepL
   lms <- access llLambdasL
   return (lms * 25 - step)
 
+-----
+
+runLLT :: MonadIO m => Flood.Flood -> [String] -> LLT m a -> m a
+runLLT fld bdl m = do
+  let finds c =
+        [ Pos (x :: Int) (y ::Int)
+        | (y, row)  <- zip [0..] bdl, (x, cell) <- zip [0..] row, cell == c
+        ]
+
+  let rpos      = head $ finds 'R'
+      lpos      = head $ finds 'L'
+      lambdaNum = length $ finds '\\'
+      rocks     = finds '*'
+
+  bd <- liftIO $ V.thaw . V.fromList =<< mapM (U.thaw . U.fromList) bdl
+
+  let initState = LLState
+        { llTotalLambdas = lambdaNum
+        , llFlood = fld
+        , llLiftPos = lpos
+
+        , llResult = Cont
+        , llStep = 0
+        , llPos = rpos
+        , llLambdas = 0
+
+        , llRockPos = sort rocks
+        , llWaterStep = 0
+
+        , llBoard = bd
+
+        , llPatches = []
+        }
+  evalStateT (unLLT m) initState
+
 showStatus :: MonadIO m => LLT m ()
 showStatus = do
-  step <- access llStepL
-  lms <- access llLambdasL
-  lambdaNum <- access llTotalLambdasL
+  LLState {..} <- get
   score1 <- winScore
   score2 <- abortScore
-  score3 <- deathScore
+  score3 <- deadScore
   liftIO $ printf "step: %d, lambdas: %03d/%03d, score: %d/%d/%d\n"
-    step lms lambdaNum
+    llStep llLambdas llTotalLambdas
     score1 score2 score3
 
-  fld <- access llFloodL
-  ws <- access llWaterStepL
   liftIO $ printf "water: %02d/%02d\n"
-    ws (Flood.waterproof fld)
+    llWaterStep (Flood.waterproof llFlood)
+
   showBoard
 
 showBoard :: MonadIO m => LLT m ()
 showBoard = do
-  bd <- access llBoardL
-  step <- access llStepL
-  fld <- access llFloodL
-  let wl = Flood.waterLevel step fld
+  LLState {..} <- get
   (w, h) <- getSize
+  let wl = Flood.waterLevel llStep llFlood
   liftIO $ do
     forM_ [h-1, h-2 .. 0] $ \y -> do
-      forM_ [0..w-1] $ \x -> do
-        hPutChar stderr =<< readPos bd (Pos x y)
+      hPutStr stderr =<< forM [0..w-1] (\x -> readPos llBoard $ Pos x y)
       hPutStrLn stderr $ if y < wl then "~~~~" else "    "
 
-type Solver m = LLT m Ans.Ans
+simulate :: Bool -> Flood.Flood -> [String] -> Solver IO
+            -> IO (Result, Int, String) -- (result, score, replay)
+simulate interactive fld bd solver = runLLT fld bd go where
+  go = do
+    -- pass the current status to the provider (and to player)
+    when interactive $ showStatus
 
-simulate :: Option.Option -> Flood.Flood ->  [String] -> Solver IO -> IO Result
-simulate opt fld bd solver = do
-  runLLT fld bd $ do
-    res <- once $ do
-      repeatLoopT $ do
-        -- pass the current status to the provider (and to player)
-        when (Option.verbose opt) $ ll showStatus
-        -- receive answer
-        ans <- ll $ solver
-        res <- case ans of
-          Ans.End -> ll $ simulateStep 'A'
-          Ans.Undo -> ll undo >> continue
-          Ans.Cont ch -> ll $ simulateStep ch
-        case res of
-          Cont -> continue
-          _ -> lift $ exitWith res
-      exitWith Cont
+    -- get move from solver and simulate one step
+    mv <- solver
+    case mv of
+      Ans.Undo -> undo -- assert interactive undo
+      Ans.End     -> do
+        when (not interactive) $ liftIO $ putChar 'A' >> hFlush stdout
+        simulateStep 'A'
+      Ans.Cont ch -> do
+        when (not interactive) $ liftIO $ putChar ch >> hFlush stdout
+        simulateStep ch
 
-    when (Option.verbose opt) $ do
-      case res of
-        Win   sc -> liftIO $ printf "You Win: %d\n" sc
-        Abort sc -> liftIO $ printf "Aborted: %d\n" sc
-        Dead  sc -> liftIO $ printf "You Died: %d\n" sc
-        Cont     -> liftIO $ printf "Not enough input\n"
-      showStatus
+    end <- isEnd
+    if not end
+      then go
+      else do
+      res     <- access llResultL
+      Just sc <- score
+      replay  <- reverse . map pMove <$> access llPatchesL
+      when interactive $ showStatus
+      return (res, sc, replay)
 
-    rep <- reverse <$> access llReplayL
-    when (Option.verbose opt) $ do
-      liftIO $ putStrLn rep
+-- simualte and undo
 
-    case Option.replay opt of
-      Option.ReplayNothing -> do
-        return ()
-      Option.ReplayDefault -> do
-        let fn = case Option.input opt of
-              Option.InputFile fp -> fp
-              Option.Stdin -> "STDIN"
-        liftIO $ system "mkdir -p replay/"
-        liftIO $ writeFile
-          (printf "replay/%s-%d-%s.txt"
-           (dropExtension $ takeFileName fn)
-           (scoreResult res)
-           (take 6 $ show $ md5 $ L.pack rep))
-          rep
+simulateStep :: (Functor m, MonadIO m) => Char -> LLT m ()
+simulateStep mv
+  | mv == 'A' = do -- abort process immediately
+    stash 'A'
+    void $ llResultL ~= Abort
+  | otherwise = do
+    stash mv
+    wlog <- liftIO $ newIORef []
+    bd <- access llBoardL
 
-    when (Option.input opt == Option.Stdin) $ do
-      liftIO $ putStrLn rep
-      liftIO $ hFlush stdout
-    return res
+    let write p v = do
+          c <- readPos bd p
+          writePos bd p v
+          liftIO $ modifyIORef wlog $ ((p, c):)
 
-simulateStep :: (Functor m, MonadIO m) => Char -> LLT m Result
-simulateStep mv = do
-  cont' <- moveC mv
-  case cont' of
-    Just cont -> do
-      stat <- backupState
-      llHistL %= (stat:)
-      llReplayL %= (mv:)
-      simulateStep' cont
-    Nothing -> return Cont
+    moveC mv write
+    update write
 
-simulateStep' :: (Functor m, MonadIO m) => Result -> LLT m Result
-simulateStep' cont = do
-  fld  <- access llFloodL
-  step <- access llStepL
-  bd   <- access llBoardL
-  lambdaNum <- access llTotalLambdasL
-  (w, h) <- getSize
+    diff <- liftIO $ readIORef wlog
+    void $ llPatchesL %= \(p:ps) -> (p { pBoardDiff = diff }:ps)
 
-  lms <- access llLambdasL
+type WriteLogger m = Pos -> Char -> LLT m ()
 
-  once $ do
-    case cont of
-      Cont -> return ()
-      Abort _ -> return () -- abort process is below
-      _ -> exitWith cont
+moveC :: (MonadIO m, Functor m) => Char -> WriteLogger m -> LLT m ()
+moveC c = case c of
+  'L' -> move $ Pos (-1) 0
+  'R' -> move $ Pos 1    0
+  'U' -> move $ Pos 0    1
+  'D' -> move $ Pos 0    (-1)
+  'W' -> \_ -> return ()
+  'A' -> \_ -> return ()
+  _   -> assert False undefined
 
-    cp@(Pos nx ny) <- lift $ access llPosL
-    bup <- readPos bd $ cp + Pos 0 1
+move :: (MonadIO m, Functor m) => Pos -> WriteLogger m -> LLT m ()
+move d wlog = do
+  LLState {..} <- get
 
-    -- update
-
-    when (lms == lambdaNum) $ do
-      lpos <- lift $ access llLiftPosL
-      lc <- readPos bd lpos
-      when (lc == 'L') $ do
-        writePos bd lpos 'O'
-
-    rocks <- lift $ access llRockPosL
-    forM_ [0 .. GM.length rocks - 1] $ \ix -> do
-      p <- liftIO $ GM.read rocks ix
-
-      c  <- readPos bd $ p + Pos 0 0
-      b  <- readPos bd $ p + Pos 0 (-1)
-      c1 <- readPos bd $ p + Pos 1 0
-      b1 <- readPos bd $ p + Pos 1 (-1)
-      c0 <- readPos bd $ p + Pos (-1) 0
-      b0 <- readPos bd $ p + Pos (-1) (-1)
-
-      case () of
-        _ | c == '*' &&
-            b == ' ' -> do
-              writePos bd p ' '
-              writePos bd (p + Pos 0 (-1)) '*'
-              liftIO $ GM.write rocks ix $ p + Pos 0 (-1)
-          | c == '*' && c1 == ' ' &&
-            b == '*' && b1 == ' ' -> do
-              writePos bd p ' '
-              writePos bd (p + Pos 1 (-1)) '*'
-              liftIO $ GM.write rocks ix $ p + Pos 1 (-1)
-          | c0 == ' ' && c == '*' &&
-            b0 == ' ' && b == '*' -> do
-              writePos bd p ' '
-              writePos bd (p + Pos (-1) (-1)) '*'
-              liftIO $ GM.write rocks ix $ p + Pos (-1) (-1)
-          | c == '*'  && c1 == ' ' &&
-            b == '\\' && b1 == ' ' -> do
-              writePos bd p ' '
-              writePos bd (p + Pos 1 (-1)) '*'
-              liftIO $ GM.write rocks ix $ p + Pos 1 (-1)
-        _ -> return ()
-
-    -- invariant
-    liftIO $ Intro.sortBy (comparing $ \(Pos x y) -> (y, x)) rocks
-
-    case cont of
-      Abort _ -> exitWith $ Abort $ lms * 50 - step
-      _ -> return()
-
-    lift $ llStepL += 1  -- increment step if it is not Abort
-
-    cup <- readPos bd $ cp + Pos 0 1
-    when (bup /= '*' && cup == '*') $ do -- DEATH!!
-      exitWith $ Dead $ lms * 25 - (step + 1)
-
-    let wl = Flood.waterLevel step fld
-    ws0 <- lift $ access llWaterStepL
-    let ws = if ny < wl  -- in the water
-                then ws0 + 1
-                else 0
-    lift $ llWaterStepL ~= ws
-    when (ws > Flood.waterproof fld) $ do
-      exitWith $ Dead $ lms * 25 - (step + 1)
-
-    return Cont
-
-undo :: MonadIO m => LLT m ()
-undo = do
-  hist <- access llHistL
-  case hist of
-    [] -> do
-      liftIO $ putStrLn "cannot undo"
-    (top:_) -> do
-      put top
-
-move :: (MonadIO m, Functor m) => Int -> Int -> LLT m Result
-move dx dy = do
-  p0 <- access llPosL
-  bd <- access llBoardL
-  step <- access llStepL
-  lms  <- access llLambdasL
-  let d = Pos dx dy
+  let p0@(Pos _ dy) = llPos
       p1 = p0 + d
-      p2 = p0 + d + d
-  c0 <- readPos bd p0
-  c1 <- readPos bd p1
-  c2 <- readPos bd p2
+      p2 = p1 + d
+
+  c1 <- readPos llBoard p1
+  c2 <- readPos llBoard p2
 
   case () of
     _ | c1 `elem` " .O\\" -> do
-        writePos bd p0 ' '
-        writePos bd p1 'R'
+        wlog p0 ' '
+        wlog p1 'R'
         when (c1 == '\\') $ void $ llLambdasL += 1
+        when (c1 == 'O')  $ void $ llResultL ~= Win
+        void $ llPosL ~= p1
+        -- push rock
+      | dy == 0 && c1 == '*' && c2 == ' ' -> do
+        wlog p0 ' '
+        wlog p1 'R'
+        wlog p2 '*'
         llPosL ~= p1
-        if c1 == 'O'
-          then do
-            llStepL += 1
-            Win <$> winScore
-          else return Cont
-      | dy == 0 && c0 == 'R' && c1 == '*' && c2 == ' ' -> do
-        writePos bd p0 ' '
-        writePos bd p1 'R'
-        writePos bd p2 '*'
-        llPosL ~= p1
-        rocks <- access llRockPosL
-        forM_ [0..GM.length rocks - 1] $ \ix -> do
-          p <- liftIO $ GM.read rocks ix
-          -- rock moves p1 => p2
-          liftIO $ when (p == p1) $ GM.write rocks ix p2
-        return Cont
-    _ ->
-      return Cont
+        void $ llRockPosL %= map (\p -> if p == p1 then p2 else p)
+      | otherwise -> do
+        return ()
 
-moveC :: (MonadIO m, Functor m) => Char -> LLT m (Maybe Result)
-moveC c = case c of
-  'L' -> Just <$> move (-1) 0
-  'R' -> Just <$> move 1    0
-  'U' -> Just <$> move 0    1
-  'D' -> Just <$> move 0    (-1)
-  'W' -> return (Just Cont)
-  'A' -> return (Just $ Abort 0)
-  _ -> return Nothing
+update :: (Functor m, MonadIO m) => WriteLogger m -> LLT m ()
+update wlog = do
+  LLState {..} <- get
+
+  -- lambda complete!
+  when (llLambdas == llTotalLambdas) $ do
+    wlog llLiftPos 'O'
+
+  newRocks <- forM llRockPos $ \p -> do
+    -- la [ca] ra
+    -- lb  cb  rb
+    let pla = p + Pos (-1) 0
+        plb = p + Pos (-1) (-1)
+        pca = p + Pos 0    0
+        pcb = p + Pos 0    (-1)
+        pra = p + Pos 1    0
+        prb = p + Pos 1    (-1)
+
+    la <- readPos llBoard pla
+    lb <- readPos llBoard plb
+    ca <- readPos llBoard pca
+    cb <- readPos llBoard pcb
+    ra <- readPos llBoard pra
+    rb <- readPos llBoard prb
+
+    case () of
+      _ | ca == '*' &&
+          cb == ' ' -> do
+            wlog pca ' '
+            wlog pcb '*'
+            return pcb
+        | ca == '*' && ra == ' ' &&
+          cb == '*' && rb == ' ' -> do
+            wlog pca ' '
+            wlog prb '*'
+            return prb
+        | la == ' ' && ca == '*' &&
+          lb == ' ' && cb == '*' -> do
+            wlog pca ' '
+            wlog plb '*'
+            return plb
+        | ca == '*'  && ra == ' ' &&
+          cb == '\\' && rb == ' ' -> do
+            wlog pca ' '
+            wlog prb '*'
+            return prb
+      _ ->
+        return pca
+
+  llStepL += 1
+  -- rocks must be sorted
+  llRockPosL ~= sortBy (comparing $ \(Pos x y) -> (y, x)) newRocks
+
+  bup <- readPos llBoard $ llPos + Pos 0 1
+  -- write transaction
+  cup <- readPos llBoard $ llPos + Pos 0 1
+
+  when (bup /= '*' && cup == '*') $ do -- Totuzen no DEATH!!
+    void $ llResultL ~= Dead
+
+  let wl = Flood.waterLevel llStep llFlood
+      ws | llPos < Pos wl minBound = llWaterStep + 1
+         | otherwise = 0
+
+  llWaterStepL ~= ws
+  when (ws > Flood.waterproof llFlood) $ do
+    void $ llResultL ~= Dead
+
+-- patch utils
+
+stash :: (MonadIO m, Functor m) => Char -> LLT m ()
+stash mv = do
+  LLState {..} <- get
+  let revPatch = LLPatch
+        { pMove = mv
+        , pPrevPos = llPos
+        , pPrevLambdas = llLambdas
+        , pPrevRocks = llRockPos
+        , pPrevWater = llWaterStep
+        , pBoardDiff = []
+        }
+  void $ llPatchesL %= (revPatch:)
+
+undo :: MonadIO m => LLT m ()
+undo = do
+  ps <- gets llPatches
+  case ps of
+    [] -> do
+      liftIO $ putStrLn "cannot undo"
+    (patch:_) -> do
+      st  <- get
+      st' <- liftIO $ st `unapply` patch
+      put st'
+
+unapply :: LLState -> LLPatch -> IO LLState
+unapply st LLPatch {..} = do
+  forM_ pBoardDiff $ \(pos, cell) -> writePos (llBoard st) pos cell
+  return $ LLState
+    { llTotalLambdas = llTotalLambdas st
+    , llFlood = llFlood st
+    , llLiftPos = llLiftPos st
+
+    , llResult = llResult st
+    , llStep = llStep st - 1
+    , llPos = pPrevPos
+    , llLambdas = pPrevLambdas
+    , llRockPos = pPrevRocks
+    , llWaterStep = pPrevWater
+
+    , llBoard = llBoard st
+    , llPatches = llPatches st
+    }
+
+-- backup and restore
+backupState :: MonadIO m => LLT m LLState
+backupState = do
+  bd  <- access llBoardL
+  nbd <- liftIO $ V.unsafeThaw =<< V.mapM UM.clone =<< V.unsafeFreeze bd
+  st <- get
+  return $ st { llBoard = nbd }
+
+restoreState :: MonadIO m => LLState -> LLT m ()
+restoreState = put
+
+withBackup :: MonadIO m => LLT m a -> LLT m a
+withBackup m = do
+  st <- backupState
+  ret <- m
+  restoreState st
+  return ret
+
+-- misc
 
 getSize :: (MonadIO m) => LLT m (Int, Int)
 getSize = do
@@ -436,5 +418,3 @@ writePos :: MonadIO m => Board -> Pos -> Char -> m ()
 writePos bd p@(Pos x y) v = whenInBoundPos bd p () $ do
   row <- GM.read bd y
   GM.write row x v
-
-ll = lift . lift

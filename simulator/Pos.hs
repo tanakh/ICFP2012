@@ -15,16 +15,22 @@ module Pos where
 type Pos = PosOf Int
 type Dpos = PosOf Double
 
-data PosOf a = Pos { px :: a, py :: a } deriving (Eq, Ord)
+data PosOf a
+  = Pos
+    { px :: {-# UNPACK #-} !a
+    , py :: {-# UNPACK #-} !a }
+  deriving (Eq, Ord)
 
 instance Show a => Show (PosOf a) where
   show (Pos x y) = show (x,y)
 
 norm :: (Num a) => PosOf a -> a
 norm (Pos x y) = abs x + abs y
+{-# INLINEABLE norm #-}
 
 innerProd :: (Num a) => (PosOf a) -> (PosOf a) -> a
 innerProd (Pos x1 y1)  (Pos x2 y2) = (x1*x2) + (y1*y2)
+{-# INLINEABLE innerProd #-}
 
 instance (Num a) => Num (PosOf a) where
   (Pos x1 y1) + (Pos x2 y2) = (x1+x2) `Pos` (y1+y2)

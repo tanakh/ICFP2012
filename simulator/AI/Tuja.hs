@@ -33,26 +33,26 @@ import           LL
 import qualified Option as Opt
 import           Pos
 
-newtype Wave = 
-  Wave  
+newtype Wave =
+  Wave
   [(Double, -- amplitude
     Double, -- freq
     Double -- initial phase
     )] deriving (Eq, Show, Read)
 
 toAmp :: Double -> Wave -> Double
-toAmp t (Wave xs) = 
+toAmp t (Wave xs) =
   sum $ map (\(a,f,p0) -> a*cos(f*t+p0)) xs
 
 toAmp2 :: Double -> Wave -> Dpos
-toAmp2 t (Wave xs) = 
+toAmp2 t (Wave xs) =
   sum $ map (\(a,f,p0) -> Pos (a*cos(f*t+p0)) (a*sin(f*t+p0)) ) xs
 
 
-data Config = 
-  Config 
+data Config =
+  Config
   {
-    searchAtom :: 
+    searchAtom ::
        [(Wave, -- weight
          String, -- source terrains
          String  -- passable terrains
@@ -67,28 +67,10 @@ main :: IO ()
 main = do
   smellRef <- newIORef Nothing
   config <- randomConfig
-  res <- defaultMainRes $ simpleSolver smellRef $ config
-  opt <- Opt.parseIO  
-  let fnInput = case Opt.input opt of
-        Opt.InputFile fp -> fp
-        Opt.Stdin -> "STDIN"
-
-  let fnRec = (printf "record/%s-%d-%s.txt"
-            (dropExtension $ takeFileName fnInput)
-            (scoreResult res)
-            (take 6 $ show $ md5 $ L.pack $ show config)) 
-  hPutStrLn stderr fnRec
-  liftIO $ system "mkdir -p record/"
-  liftIO $ writeFile fnRec $
-    unlines $
-      [show $ scoreResult res,
-       show $ res,
-       show $ config
-      ]
-
+  defaultMain $ simpleSolver smellRef $ config
 
 randomConfig :: IO Config
-randomConfig = 
+randomConfig =
   Config <$> randomSearchAtom <*> randomMany 5 randomWindAtom1
 
 
@@ -97,11 +79,11 @@ choose xs = do
   i <- randomRIO (0,length xs-1)
   return $ xs !! i
 
-normalSearchAtom = 
+normalSearchAtom =
     (Wave [(2.302,0,0)], "\\O", " .")
 
 randomSearchAtom :: IO [(Wave, String, String)]
-randomSearchAtom = 
+randomSearchAtom =
   (normalSearchAtom :) <$> randomMany 3 randomSearchAtom1
 
 randomSearchAtom1 = do
@@ -146,9 +128,9 @@ simpleSolver :: IORef (Maybe (Field Double)) -> Config -> Solver IO
 simpleSolver smellRef config = safetynet $ do
   -- setup initial valmap, dijkstra field
   bd <- access llBoardL
-  validHands <- filterM isEffectiveMove "LRUD"  
-  -- dono te ga tsuyoinoka; watashi kininarimasu! 
-  hyokaRef <- liftIO $ newIORef $ 
+  validHands <- filterM isEffectiveMove "LRUD"
+  -- dono te ga tsuyoinoka; watashi kininarimasu!
+  hyokaRef <- liftIO $ newIORef $
                 Map.fromList [(hand,0::Double) | hand <- validHands]
   let addHyoka hand val =
         liftIO $ modifyIORef hyokaRef (Map.update (Just . (val+)) hand)
@@ -169,10 +151,10 @@ simpleSolver smellRef config = safetynet $ do
 
   -- treat each wind
   forM_ (windAtom config) $ \ (wave, windWave) -> do
-    forM_ validHands $ \hand -> do      
+    forM_ validHands $ \hand -> do
       let vec = fromIntegral <$> hand2pos hand
           windVec = toAmp2 time windWave
-          val = (exp . toAmp time) wave * (vec `innerProd` windVec)    
+          val = (exp . toAmp time) wave * (vec `innerProd` windVec)
       addHyoka hand val
   -- treat each search
   forM_ (searchAtom config) $ \ (wave, srcStr, passStr) -> do
@@ -186,8 +168,7 @@ simpleSolver smellRef config = safetynet $ do
   hyokaMap <- liftIO $ readIORef hyokaRef
   if step > 1000
      then return $ Ans.Cont 'A'
-     else return $ Ans.Cont $ 
-       snd $ last $ sort $  
+     else return $ Ans.Cont $
+       snd $ last $ sort $
        map (\(hand,val) -> (val,hand)) $
        Map.toList $ hyokaMap
-

@@ -4,7 +4,12 @@ module Flood
   , waterLevel
   ) where
 
-data Flood = Flood { water :: Int, flooding :: Int, waterproof :: Int }
+data Flood
+  = Flood
+    { water :: {-# UNPACK #-} !Int
+    , flooding :: {-# UNPACK #-} !Int
+    , waterproof :: {-# UNPACK #-} !Int
+    }
 
 defaultFlood :: Flood
 defaultFlood = Flood 0 0 10

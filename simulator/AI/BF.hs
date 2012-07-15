@@ -61,15 +61,24 @@ main = do
   oracle <- Oracle.new inputfn
   defaultMain oracle $ do
     valueField <- newF (0::Int)
-    dijkstra valueField "\\O" " .*W!R" 0
+    dijkstra valueField "\\O" " .!\\R" 0
     updateF valueField (\x -> max 0 $ 75-x)
     hmr <- liftIO $ newIORef HM.empty
     (mov, sc) <- withBackup $ search valueField hmr 10
-
+    
     (liftIO . Oracle.submit oracle) =<< getAbortTejun
 
-    liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++ [mov]
-    return $ Ans.Cont mov
+    roboPos <- access llPosL
+    val <- unsafeReadF valueField roboPos
+    mov2 <- if mov /= 'A' || val <= 0 
+               then return mov
+               else do
+                   cand <- forM "URLD" $ \hand -> do
+                         val3 <- unsafeReadF valueField $ roboPos + hand2pos hand
+                         return (val3, hand)
+                   return $ snd $ last $ sort $ cand
+    liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++ nub [mov,mov2]
+    return $ Ans.Cont mov2
 
 best :: (Functor m, MonadIO m)
         => [Char] -> (Char -> LLT m Int) -> LLT m (Char, Int)
@@ -93,8 +102,6 @@ search valueField cache fuel
   | fuel <= 0 =
     (undefined,) <$> staticScore valueField
   | otherwise = do
-    roboPos <- access llPosL
-    val <- unsafeReadF valueField roboPos
     let choices= "LRUDWSA"
     st <- get
     ok <- liftIO $ addCacheEntry cache st

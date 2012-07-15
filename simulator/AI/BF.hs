@@ -144,6 +144,7 @@ main = do
         return $ maximumBy (comparing snd) rs
   
       (w,h) <- getSize
+      roboPos <- access llPosL
       let radius :: Double
           radius = fromIntegral $ w+h
       bd <- access llBoardL
@@ -171,13 +172,15 @@ main = do
                   writeF newLoveField r =<< liftIO (randomRIO (0, placeLoveAmp * radius))                
             liftIO $ writeIORef loveFieldRef newLoveField
             return newLoveField
+      -- love disappears when you reach there...
+      writeF loveField roboPos 0
+
       razors <- access llRazorsL             
       let passable 
             | razors > 0 = " .!\\RWA"
             | otherwise  = " .!\\RA"
       dijkstraEX valueField "\\O" passable motionWeight earthDrug loveField 0
       updateF valueField (\x -> max 0 $ 75-x)
-      roboPos <- access llPosL
       val <- unsafeReadF valueField roboPos
       (mov2, confidence) <-  do
                cand <- forM "LRUD" $ \hand -> do

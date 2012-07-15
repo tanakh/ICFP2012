@@ -449,7 +449,7 @@ update wlog commit = do
             when (isRock rr) $ modifyIORef rrocks (prb:)
 
       _ ->
-        when (ca == '*') $ modifyIORef rrocks (pca:)
+        when (isRock ca) $ modifyIORef rrocks (pca:)
 
   -- lambda complete!
   liftIO $ when (llLambdas == llTotalLambdas) $ do

@@ -97,6 +97,7 @@ main :: IO ()
 main = do
   opt <- Option.parseIO
   valueFieldRef <- newIORef undefined
+  loveFieldRef <- newIORef undefined
   let inputfn = case Option.input opt of
             Option.InputFile fp -> fp
             Option.Stdin -> "STDIN"
@@ -112,6 +113,14 @@ main = do
       w <- randomRIO (0.1, 3)
       return (char, w)
     history <- newIORef HM.empty
+    
+
+    earthDrugAmp <- liftIO $ Oracle.ask oracle "earthDrugAmp" $ return (0.0::Double)
+    earthDrug <- exp <$> randomRIO (- earthDrugAmp, earthDrugAmp) 
+    itemLoveAmp <- liftIO $ Oracle.ask oracle "itemLoveAmp" $ return (0.0:: Double)
+    placeLoveNum <- liftIO $ Oracle.ask oracle "placeLoveNum" $ return (0.0:: Double)
+    
+
     --- start of One Challenge
     defaultMain oracle $ do
       step <- access llStepL
@@ -134,12 +143,31 @@ main = do
           (mov, ) <$> eval undefined hmr 0 bfDepth
         return $ maximumBy (comparing snd) rs
   
+      (w,h) <- getSize
+      let radius :: Double
+          radius = fromIntegral $ w+h
+      bd <- access llBoardL
+
       greedyDepth <- liftIO $ Oracle.ask oracle "greedyDepth" $ return 4
-      valueField <- if step > 0 then liftIO $ readIORef valueFieldRef
-                                else do
-                                    ret <- newF (0::Double)
-                                    liftIO $ writeIORef valueFieldRef ret
-                                    return ret
+      valueField <- 
+        if step > 0 
+          then liftIO $ readIORef valueFieldRef
+          else do
+            ret <- newF (0::Double)
+            liftIO $ writeIORef valueFieldRef ret
+            return ret
+      loveField <- 
+        if step > 0 
+          then liftIO $ readIORef loveFieldRef
+          else do
+            newLoveField <- newF (0::Double)
+            forPos $ \ r -> do
+              a <- unsafeReadF bd r
+              when (a `elem` "ABCDEFGHI!" && itemLoveAmp > 0) $ 
+                writeF newLoveField r =<< liftIO (randomRIO (0, itemLoveAmp * radius))
+            liftIO $ writeIORef loveFieldRef newLoveField
+            return newLoveField
+
       dijkstraEX valueField "\\O" " .!\\R" motionWeight 0
       updateF valueField (\x -> max 0 $ 75-x)
       roboPos <- access llPosL

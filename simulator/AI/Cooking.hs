@@ -7,6 +7,7 @@ import Control.Monad
 import           Pos
 import System.Random
 
+
 newtype Wave = 
   Wave  
   [(Double, -- amplitude
@@ -89,6 +90,7 @@ data Config =
 randomConfig :: Recipe -> IO Config
 randomConfig r = 
   Config <$> randomSearchAtom r <*> randomMany (weightAtomNum r) (randomWindAtom1 r)
+
 
 
 choose :: [a] -> IO a

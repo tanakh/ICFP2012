@@ -73,5 +73,7 @@ defaultMain oracle theSolver = do
          score
          (take 6 $ show $ md5 $ L.pack replay))
         replay
+
   -- honban you shutsuryoku
-  putStrLn replay
+  infiniteLoop <- Oracle.ask oracle "infiniteLoop" $ return False
+  when (infiniteLoop) $ putStrLn replay

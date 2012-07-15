@@ -20,7 +20,7 @@ module LL (
   whenInBoundPos,
   readPos, readPosM, writePos,
   getReplay,
-
+  getAbortTejun,
   -- full backup, and restore (maybe heave...)
   backupState, restoreState, withBackup,
 
@@ -55,6 +55,7 @@ import Data.Word
 import System.IO
 import Text.Printf
 
+import AI.Oracle(Oracle)
 import qualified Ans
 import qualified Flood
 import Pos
@@ -215,6 +216,9 @@ showBoard = do
     forM_ [h-1, h-2 .. 0] $ \y -> do
       putStr =<< forM [0..w-1] (\x -> readPos llBoard $ Pos x y)
       putStrLn $ if y < wl then "~~~~" else "    "
+
+getAbortTejun ::  (Functor m, MonadIO m) => LLT m Tejun
+getAbortTejun = Tejun <$> abortScore <*> pure Abort <*> getReplay
 
 getReplay :: (Functor m, MonadIO m) => LLT m String
 getReplay = reverse . map pMove <$> access llPatchesL

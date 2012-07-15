@@ -9,13 +9,15 @@ import System.Cmd
 import System.FilePath
 import Text.Printf
 
+import qualified AI.Oracle as Oracle
 import           LL
 import qualified Option
 import           Provider
 import qualified Flood
 
-defaultMain :: Solver IO -> IO ()
-defaultMain theSolver = do
+
+defaultMain :: Oracle.Oracle -> Solver IO -> IO ()
+defaultMain oracle theSolver = do
   opt <- Option.parseIO
   txt <- case Option.input opt of
     Option.Stdin -> getContents
@@ -41,6 +43,8 @@ defaultMain theSolver = do
 
   when (Option.verbose opt) $ do
     printf "%s %d: %s\n" (show res) score replay
+  Oracle.submit oracle $ Tejun score res replay
+  Oracle.save oracle  
 
   case Option.replay opt of
     Option.ReplayNothing -> do

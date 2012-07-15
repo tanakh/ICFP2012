@@ -16,10 +16,12 @@ import System.IO
 
 import Ans
 import AI.Common
+import qualified AI.Oracle as Oracle
 import DefaultMain
 import LL
 import AI.GorinNoSho
 import AI.Oracle
+import qualified Option
 
 minf :: Int
 minf = -10^(9::Int)
@@ -51,14 +53,23 @@ addCacheEntry hmr st = do
   return cm
 
 main :: IO ()
-main = defaultMain $ do
-  valueField <- newF (0::Int)
-  dijkstra valueField "\\O" " .*W!R" 0
-  updateF valueField (75-)
-  hmr <- liftIO $ newIORef HM.empty
-  (mov, sc) <- withBackup $ search valueField hmr 10
-  liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++ [mov]
-  return $ Ans.Cont mov
+main = do
+  opt <- Option.parseIO
+  let inputfn = case Option.input opt of
+            Option.InputFile fp -> fp
+            Option.Stdin -> "STDIN"
+  oracle <- Oracle.new inputfn
+  defaultMain oracle $ do
+    valueField <- newF (0::Int)
+    dijkstra valueField "\\O" " .*W!R" 0
+    updateF valueField (75-)
+    hmr <- liftIO $ newIORef HM.empty
+    (mov, sc) <- withBackup $ search valueField hmr 10
+
+    (liftIO . Oracle.submit oracle) =<< getAbortTejun
+
+    liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++ [mov]
+    return $ Ans.Cont mov
 
 best :: (Functor m, MonadIO m)
         => [Char] -> (Char -> LLT m Int) -> LLT m (Char, Int)

@@ -77,8 +77,8 @@ addCacheEntry hmr st = do
     modifyIORef hmr $ HM.insertWith (++) (llHash st) [ce]
   return cm
 
-goodnessCheck :: History -> History -> Int ->  Char -> LL Int
-goodnessCheck hist hyperhist fuel hand
+badnessCheck :: History -> History -> Int ->  Char -> LL Int
+badnessCheck hist hyperhist fuel hand
   | fuel <= 0 = withStep hand $ do
                        res <- access llResultL
                        h <- access llHashL
@@ -86,12 +86,12 @@ goodnessCheck hist hyperhist fuel hand
                        cnt <- liftIO $ readHistory hist h
                        cnt2 <- liftIO $ readHistory hyperhist h
                        return $ case () of
-                                  _ | res == Dead        -> -3
-                                    | cnt > 0            -> -2
-                                    | cnt2*step >  0     -> -1
+                                  _ | res == Dead        ->  3
+                                    | cnt > 0            ->  2
+                                    | cnt2*step >  0     ->  1
                                     | True               ->  0
   | otherwise = withStep hand $ do
-                    gs <- (forM "LRUD" $ goodnessCheck hist hyperhist (fuel-1))
+                    gs <- (forM "LRUD" $ badnessCheck hist hyperhist (fuel-1))
                     return $ maximum gs
 main :: IO ()
 main = do
@@ -164,7 +164,8 @@ main = do
             newLoveField <- newF (0::Double)
             forPos $ \ r -> do
               a <- unsafeReadF bd r
-              when (a `elem` "ABCDEFGHI!" && itemLoveAmp > 0) $ 
+              when (a `elem` "ABCDEFGHI!" && itemLoveAmp /= 0) $ do
+                printe "ATTAGIGE"
                 writeF newLoveField r =<< liftIO (randomRIO (0, itemLoveAmp * radius))
               when (placeLoveNum > 0) $ do
                 dice <- liftIO $ randomRIO (0,1)
@@ -180,14 +181,14 @@ main = do
             | razors > 0 = " .!\\RWA"
             | otherwise  = " .!\\RA"
       dijkstraEX valueField "\\O" passable motionWeight earthDrug loveField 0
-      updateF valueField (\x -> max 0 $ 75-x)
+      showF (wideShow 5) valueField
       val <- unsafeReadF valueField roboPos
-      (mov2, confidence) <-  do
+      (mov2, yabasa) <-  do
                cand <- forM "LRUD" $ \hand -> do
                      val3 <- unsafeReadF valueField $ roboPos + hand2pos hand
-                     flag <- goodnessCheck history hyperHistory greedyDepth hand
+                     flag <- badnessCheck history hyperHistory greedyDepth hand
                      return ((flag,val3), hand)
-               let top = last $ sort $ cand
+               let top = head $ sort $ cand
                return $ (snd top {-move-}, fst (fst top) {-whether it was safe-})
   
       combineBFFirst <- liftIO $ Oracle.ask oracle "combineBFFirst" $ return True
@@ -198,7 +199,7 @@ main = do
            | perfectGreedy                              = mov2
            | combineBFFirst && (mov /= 'A' || val <= 0) = mov
            | combineBFFirst                             = mov2
-           | not (combineBFFirst) && (confidence < 0)   = mov2
+           | not (combineBFFirst) && (yabasa > 0)       = mov2
            | otherwise                                  = mov
   
       when (Option.verbose opt) $ liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++  [mov,mov2]

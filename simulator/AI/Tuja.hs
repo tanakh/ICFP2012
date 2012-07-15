@@ -24,10 +24,10 @@ import System.IO
 import System.Process
 import System.Posix.Time
 import System.Posix.Unistd
-import System.Random
 import System.FilePath
 import Text.Printf
 
+import           AI.Cooking
 import           AI.Common
 import           AI.GorinNoSho
 import qualified Ans as Ans
@@ -36,85 +36,6 @@ import qualified Flood
 import           LL
 import qualified Option as Option
 import           Pos
-
-newtype Wave = 
-  Wave  
-  [(Double, -- amplitude
-    Double, -- freq
-    Double -- initial phase
-    )] deriving (Eq, Show, Read)
-
-toAmp :: Double -> Wave -> Double
-toAmp t (Wave xs) = 
-  sum $ map (\(a,f,p0) -> a*cos(f*t+p0)) xs
-
-toAmp2 :: Double -> Wave -> Dpos
-toAmp2 t (Wave xs) = 
-  sum $ map (\(a,f,p0) -> Pos (a*cos(f*t+p0)) (a*sin(f*t+p0)) ) xs
-
-
-data Config = 
-  Config 
-  {
-    searchAtom :: 
-       [(Wave, -- weight
-         String, -- source terrains
-         String  -- passable terrains
-        )],
-    windAtom ::
-       [(Wave, -- weight
-         Wave -- direction
-        )]
-  } deriving (Eq, Show, Read)
-
-randomConfig :: IO Config
-randomConfig = 
-  Config <$> randomSearchAtom <*> randomMany 5 randomWindAtom1
-
-
-choose :: [a] -> IO a
-choose xs = do
-  i <- randomRIO (0,length xs-1)
-  return $ xs !! i
-
-normalSearchAtom = 
-    (Wave [(2.302, 0, 0)], "\\O", " .")
-
-randomSearchAtom :: IO [(Wave, String, String)]
-randomSearchAtom = 
-  (normalSearchAtom :) <$> randomMany 3 randomSearchAtom1
-
-randomSearchAtom1 = do
-  w <- randomWeight
-  src <- choose ["\\O", "*"]
-  pass <- choose [" "," ."," .\\"," .*"]
-  return (w, src, pass)
-
-randomWindAtom1 = do
-  w <- randomWeight
-  f  <- (*) <$> randomRIO (-1, 1) <*> (exp <$> randomRIO (-4, 0))
-  p0 <- randomRIO (0, 2*pi)
-  return (w, Wave [(1,f,p0)])
-
-randomWeight :: IO Wave
-randomWeight = Wave <$> randomMany 5 randomWeight1
-
-randomWeight1 :: IO (Double, Double, Double)
-randomWeight1 = do
-  a  <- randomRIO (0, 1)
-  f  <- (*) <$> randomRIO (-1, 1) <*> (exp <$> randomRIO (-4, 0))
-  p0 <- randomRIO (0, 2*pi)
-  return (a,f,p0)
-
-
-randomMany :: Double -> IO a -> IO [a]
-randomMany num m = do
-  x  <- m
-  dice <- randomRIO (0,1)
-  xs <- if dice > (1/num)
-                then randomMany num m
-                else return []
-  return $ x:xs
 
 
 
@@ -147,7 +68,8 @@ main = do
     Option.Ninja -> ninjaMain opt startTime  fld bd
     Option.Survey -> do  
       res0 <- initResource
-      config <- randomConfig  
+      recipe <- randomRecipe
+      config <- randomConfig recipe
       let res 
             | Option.verbose opt = res0{submitter = printe}
             | otherwise          = res0
@@ -176,7 +98,7 @@ ninjaMain opt startTime fld bd = do
   bestTejun <- newTVarIO $ Tejun 0 Abort "A"
   population <- newTVarIO $ 0
   forkIO $ launcher population submitQ fld bd
-  forkIO $ collector submitQ bestTejun
+  forkIO $ collector opt submitQ bestTejun
   waitOhagi opt startTime bestTejun
 
 launcher population submitQ fld bd = forever $ do
@@ -184,7 +106,7 @@ launcher population submitQ fld bd = forever $ do
   when (pop < 30) $ do
     res0 <- initResource
     let res = res0 { submitter = \x -> atomically $ writeTQueue submitQ x}
-    config <- randomConfig
+    config <- randomConfig theRecipe
     forkIO $ do
       atomically $ modifyTVar population (1+)
       runLLT fld bd $ simpleSolver res config
@@ -192,17 +114,18 @@ launcher population submitQ fld bd = forever $ do
     return ()
   when (pop > 10) $ usleep 1000
   
-collector submitQ bestTejun = forever $do
+collector opt submitQ bestTejun = forever $do
   tejun <- atomically $ readTQueue submitQ
-  hPutStrLn stderr $ "receive " ++ show tejun
   atomically $ modifyTVar bestTejun (max tejun)
   best <- atomically $ readTVar bestTejun
-  hPutStrLn stderr $ "my best " ++ show best
+  when (Option.verbose opt) $ do
+    hPutStrLn stderr $ "receive " ++ show tejun
+    hPutStrLn stderr $ "my best " ++ show best
   
 waitOhagi opt startTime bestTejun = do
   t <- getCurrentTime
   case () of 
-    _ | t > startTime + Option.timeout opt -> do
+    _ | t > startTime + Option.timeout opt -2 -> do
           Tejun _ _ str <- atomically $ readTVar bestTejun
           putStrLn str
       | otherwise -> do

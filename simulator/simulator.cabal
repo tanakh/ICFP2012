@@ -19,8 +19,8 @@ library
   exposed-modules:     Ans
                        AI.Common
                        AI.Cooking
-                       AI.LearnedConfig
                        AI.GorinNoSho
+                       AI.Oracle
                        DefaultMain
                        Flood
                        LL
@@ -43,6 +43,7 @@ library
                      , pqueue
                      , process
                      , random
+                     , containers
 
 executable ll-simulator
   ghc-options:         -O2
@@ -90,6 +91,15 @@ executable ll-ai-bf
                      , vector, data-lens-fd, mtl, control-monad-loop, stm
                      , unordered-containers
   buildable:           True
+
+executable ll-ai-babayaga
+  ghc-options:         -O2
+  hs-source-dirs:      dist
+  main-is:             ../AI/BabaYaga.hs
+  build-depends:       base ==4.5.*, simulator
+                     , vector, data-lens-fd, mtl, control-monad-loop, stm
+  buildable:           True
+
 
 executable ll-ai-tuja
   ghc-options:         -O3

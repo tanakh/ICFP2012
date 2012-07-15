@@ -38,7 +38,7 @@ theRecipe = Recipe
     possiblyPass = " .\\*"
          }
  
-allChars = "R*L.#\\O "
+allChars = "R*L.#\\O @!WA1"
 
 randomRecipe :: IO Recipe
 randomRecipe = do

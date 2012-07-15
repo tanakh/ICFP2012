@@ -17,13 +17,9 @@ bestConfs = []
 }
 
 
-open("AI/LearnedConfig.hs",'w'){|fp|
+open("learned.txt",'w'){|fp|
   fp.puts <<HS
-module AI.LearnedConfig where
-import AI.Cooking
-
-learnedConfigs :: [Config]
-learnedConfigs = [#{bestConfs.join(',')}]
+[#{bestConfs.join(',')}]
 HS
 }
 

@@ -179,7 +179,7 @@ main = do
       step <- access llStepL
       (liftIO . Oracle.submit oracle) =<< getAbortTejun
       (w,h) <- getSize
-      bfDepth <- liftIO $ Oracle.ask oracle "bfDepth" $ return (if w+h > 32 then 2 else 16)
+      bfDepth <- liftIO $ Oracle.ask oracle "bfDepth" $ return (max 16 $ min 2 $ 640 `div` (w+h)) -- was 16
       hmr <- liftIO $ newIORef HM.empty
 
       hashNow <- access llHashL

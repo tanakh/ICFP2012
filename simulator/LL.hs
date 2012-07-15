@@ -390,9 +390,7 @@ update wlog commit = do
 
   -- sanitize rocks' pos
   newRocks' <-
-    if not growing then return newRocks
-    else do
-      filterM (\p -> (=='*') <$> readPos llBoard p) newRocks
+    filterM (\p -> (=='*') <$> readPos llBoard p) newRocks
 
   -- rocks must be sorted
   llRockPosL ~= sortp newRocks'

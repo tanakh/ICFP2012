@@ -77,18 +77,21 @@ addCacheEntry hmr st = do
     modifyIORef hmr $ HM.insertWith (++) (llHash st) [ce]
   return cm
 
-goodnessCheck :: History -> Int ->  Char -> LL Int
-goodnessCheck hist fuel hand
+goodnessCheck :: History -> History -> Int ->  Char -> LL Int
+goodnessCheck hist hyperhist fuel hand
   | fuel <= 0 = withStep hand $ do
                        res <- access llResultL
                        h <- access llHashL
+                       step <- access llStepL
                        cnt <- liftIO $ readHistory hist h
+                       cnt2 <- liftIO $ readHistory hyperhist h
                        return $ case () of
-                                  _ | res == Dead -> -2
-                                    | cnt > 0     -> -1
-                                    | True        ->  0
+                                  _ | res == Dead        -> -3
+                                    | cnt > 0            -> -2
+                                    | cnt2*step >  0     -> -1
+                                    | True               ->  0
   | otherwise = withStep hand $ do
-                    gs <- (forM "LRUD" $ goodnessCheck hist (fuel-1))
+                    gs <- (forM "LRUD" $ goodnessCheck hist hyperhist (fuel-1))
                     return $ maximum gs
 main :: IO ()
 main = do
@@ -100,9 +103,11 @@ main = do
   oracle <- Oracle.new inputfn
   when (Option.oracleSource opt/= "") $ do
     Oracle.load oracle $ Option.oracleSource opt
+  hyperHistory <- newIORef HM.empty  
 
   infiniteLoop <- liftIO $ Oracle.ask oracle "infiniteLoop" $ return False
   (if infiniteLoop then forever else id) $ do
+    -- randomize approach
     motionWeight <- forM "LRUD" $ \char -> do
       w <- randomRIO (0.1, 3)
       return (char, w)
@@ -118,6 +123,10 @@ main = do
       hashNow <- access llHashL
       kabutta <- (>2) <$> (liftIO $ readHistory history hashNow)
       liftIO $ modifyHistory history hashNow (1+)  
+
+      liftIO $ do
+        useHyperHistory <- Oracle.ask oracle "useHyperHistory" $ return False
+        when (useHyperHistory) $ modifyHistory hyperHistory hashNow (1+)  
   
       (mov, sc) <- withBackup $ do
         rs <- forM moves $ \mov -> withStep mov $ do
@@ -138,7 +147,7 @@ main = do
       (mov2, confidence) <-  do
                cand <- forM "LRUD" $ \hand -> do
                      val3 <- unsafeReadF valueField $ roboPos + hand2pos hand
-                     flag <- goodnessCheck history greedyDepth hand
+                     flag <- goodnessCheck history hyperHistory greedyDepth hand
                      return ((flag,val3), hand)
                let top = last $ sort $ cand
                return $ (snd top {-move-}, fst (fst top) {-whether it was safe-})

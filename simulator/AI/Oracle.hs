@@ -56,8 +56,8 @@ save :: Oracle -> IO ()
 save oracle = do
   db <- atomically $ readTVar (dbVar oracle)
   Tejun score res rep <- atomically $ readTVar (tejunVar oracle)
-  let dirName = printf "oracle/%s/" (dropExtension $ takeFileName $ taskName oracle)
-      fileName = printf "%s/%d-%s.txt" dirName score (take 6 $ show $ md5 $ L.pack dbstr)
+  let dirName = printf "oracle/%s/" (take 12 $ show $ md5 $ L.pack dbstr)
+      fileName = printf "%s/%d-%s.txt" dirName score (dropExtension $ takeFileName $ taskName oracle)
       dbstr = show db
   system $ "mkdir -p " ++ dirName
   writeFile fileName $ unlines

@@ -97,4 +97,3 @@ executable ll-ai-tuja
                        , pqueue,vector, data-lens-fd, mtl, control-monad-loop
                        , stm, containers, unix, random,filepath, bytestring,pureMD5
                        , process
-  buildable:           False

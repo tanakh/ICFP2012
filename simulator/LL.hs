@@ -11,6 +11,7 @@ module LL (
 
   -- exec step, and undo
   simulateStep, undo,
+  withStep,
   isEnd, score, abortScore, deadScore, winScore,
 
   -- aux
@@ -38,6 +39,7 @@ import Control.Monad
 import Control.Monad.Error
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Loop
+import Data.Bits
 import Data.IORef
 import Data.Lens
 import Data.List
@@ -49,6 +51,7 @@ import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Unboxed.Mutable as UM
 import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Generic.Mutable as GM
+import Data.Word
 import System.IO
 import Text.Printf
 
@@ -61,7 +64,8 @@ newtype LLT m a
   = LLT { unLLT :: StateT LLState m a }
   deriving ( Functor, Applicative
            , Monad, MonadIO
-           , MonadState LLState, MonadTrans)
+           , MonadState LLState, MonadTrans
+           )
 
 type Solver m = LLT m Ans.Ans
 
@@ -88,7 +92,7 @@ winScore = do
 abortScore = do
   step <- access llStepL
   lms <- access llLambdasL
-  return (lms * 50 - step)
+  return (lms * 50 - step + 1)
 
 deadScore = do
   step <- access llStepL
@@ -96,6 +100,16 @@ deadScore = do
   return (lms * 25 - step)
 
 -----
+
+pr1, pr2, pr3 :: Word64
+pr1 = 268435456 + 3
+pr2 = 536870912 + 11
+pr3 = 1073741824 + 85
+
+hashChar :: Pos -> Char -> Word64
+hashChar (Pos x y) c = do
+  (fromIntegral x * pr1 + fromIntegral y) * pr2 +
+    fromIntegral (fromEnum c) * pr3
 
 runLLT :: MonadIO m => String -> LLT m a -> m a
 runLLT txt m = do
@@ -135,6 +149,10 @@ runLLT txt m = do
       rocks     = map snd $ finds isRock
 
   bd <- liftIO $ V.thaw . V.fromList =<< mapM (U.thaw . U.fromList) bdl
+  let hash = foldl' xor 0
+        [ hashChar (Pos x y) cell
+        | (y, row)  <- zip [0..] bdl, (x, cell) <- zip [0..] row
+        ]
 
   let initState = LLState
         { llTotalLambdas = lambdaNum
@@ -153,6 +171,7 @@ runLLT txt m = do
         , llRazors = razors
 
         , llBoard = bd
+        , llHash = hash
 
         , llPatches = []
         }
@@ -192,8 +211,8 @@ showBoard = do
   let wl = Flood.waterLevel llStep llFlood
   liftIO $ do
     forM_ [h-1, h-2 .. 0] $ \y -> do
-      hPutStr stderr =<< forM [0..w-1] (\x -> readPos llBoard $ Pos x y)
-      hPutStrLn stderr $ if y < wl then "~~~~" else "    "
+      putStr =<< forM [0..w-1] (\x -> readPos llBoard $ Pos x y)
+      putStrLn $ if y < wl then "~~~~" else "    "
 
 getReplay :: (Functor m, MonadIO m) => LLT m String
 getReplay = reverse . map pMove <$> access llPatchesL
@@ -227,13 +246,23 @@ simulate interactive txt solver = runLLT txt go where
 
 -- simualte and undo
 
+withStep :: (Functor m, MonadIO m) => Char -> LLT m a -> LLT m a
+withStep mv m = do
+  simulateStep mv
+  ret <- m
+  undo
+  return ret
+
 simulateStep :: (Functor m, MonadIO m) => Char -> LLT m ()
-simulateStep mv
-  | mv == 'A' = do -- abort process immediately
-    stash 'A'
-    void $ llResultL ~= Abort
-  | otherwise = do
-    stash mv
+simulateStep mv = do
+  stash mv
+
+  if mv == 'A'
+    then do
+    llResultL ~= Abort
+    return ()
+
+    else do
     wlog <- liftIO $ newIORef []
     rlog <- liftIO $ newIORef []
     bd <- access llBoardL
@@ -251,7 +280,11 @@ simulateStep mv
     update write commit
 
     diff <- liftIO $ readIORef rlog
-    void $ llPatchesL %= \(p:ps) -> (p { pBoardDiff = diff }:ps)
+    let hash = foldl' xor 0 $ map (\(p, c) -> hashChar p c) diff
+    void $ llPatchesL %= \(p:ps) -> (p { pBoardDiff = diff, pHash = hash }:ps)
+
+  llStepL += 1
+  return ()
 
 type WriteLogger m = Pos -> Char -> LLT m ()
 type Commit m = LLT m ()
@@ -264,7 +297,6 @@ moveC c = case c of
   'D' -> move $ Pos 0    (-1)
   'S' -> shave
   'W' -> \_ -> return ()
-  'A' -> \_ -> return ()
   _   -> assert False undefined
 
 isRock :: Char -> Bool
@@ -428,9 +460,6 @@ update wlog commit = do
   when (ws > Flood.waterproof llFlood) $ do
     void $ llResultL ~= Dead
 
-  -- finally, incr step
-  llStepL += 1
-
   return ()
 
 -- patch utils
@@ -439,20 +468,21 @@ stash :: (MonadIO m, Functor m) => Char -> LLT m ()
 stash mv = do
   LLState {..} <- get
   let revPatch = LLPatch
-        { pMove = mv
-        , pPrevPos = llPos
+        { pMove        = mv
+        , pPrevResult  = llResult
+        , pPrevPos     = llPos
         , pPrevLambdas = llLambdas
-        , pPrevRocks = llRockPos
-        , pPrevWater = llWaterStep
-        , pPrevRazors = llRazors
-        , pBoardDiff = []
+        , pPrevRocks   = llRockPos
+        , pPrevWater   = llWaterStep
+        , pPrevRazors  = llRazors
+        , pBoardDiff   = []
+        , pHash        = 0
         }
   void $ llPatchesL %= (revPatch:)
 
 undo :: MonadIO m => LLT m ()
 undo = do
-  ps <- gets llPatches
-  liftIO $ print $ length ps
+  ps <- access llPatchesL
   case ps of
     [] -> do
       liftIO $ putStrLn "cannot undo"
@@ -465,22 +495,26 @@ unapply :: LLState -> LLPatch -> IO LLState
 unapply st LLPatch {..} = do
   forM_ pBoardDiff $ \(pos, cell) -> writePos (llBoard st) pos cell
   return $ LLState
-    { llTotalLambdas = llTotalLambdas st
+    { -- constant
+      llTotalLambdas = llTotalLambdas st
     , llLiftPos = llLiftPos st
     , llFlood = llFlood st
     , llTramp = llTramp st
     , llGrowth = llGrowth st
 
-    , llResult = llResult st
-    , llStep = llStep st - 1
-    , llPos = pPrevPos
-    , llLambdas = pPrevLambdas
-    , llRockPos = pPrevRocks
+      -- revert previous status
+    , llResult    = pPrevResult
+    , llStep      = llStep st - 1
+    , llPos       = pPrevPos
+    , llLambdas   = pPrevLambdas
+    , llRockPos   = pPrevRocks
     , llWaterStep = pPrevWater
-    , llRazors = pPrevRazors
+    , llRazors    = pPrevRazors
 
     , llBoard = llBoard st
-    , llPatches = drop 1 $ llPatches st
+    , llHash  = llHash st `xor` pHash
+
+    , llPatches = tail $ llPatches st
     }
 
 -- backup and restore

@@ -44,6 +44,7 @@ import qualified Data.Vector.Unboxed.Mutable as UM
 import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Generic.Mutable as GM
 import System.FilePath
+import System.Process
 import System.IO
 import Text.Printf
 
@@ -228,8 +229,9 @@ simulate opt fld bd solver = do
         let fn = case Option.input opt of
               Option.InputFile fp -> fp
               Option.Stdin -> "STDIN"
+        liftIO $ system "mkdir -p replay/"
         liftIO $ writeFile
-          (printf "replay-%s-%d-%s.txt"
+          (printf "replay/%s-%d-%s.txt"
            (dropExtension $ takeFileName fn)
            (scoreResult res)
            (take 6 $ show $ md5 $ L.pack rep))

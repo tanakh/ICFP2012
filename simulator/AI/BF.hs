@@ -62,7 +62,7 @@ main = do
   defaultMain oracle $ do
     valueField <- newF (0::Int)
     dijkstra valueField "\\O" " .*W!R" 0
-    updateF valueField (75-)
+    updateF valueField (\x -> max 0 $ 75-x)
     hmr <- liftIO $ newIORef HM.empty
     (mov, sc) <- withBackup $ search valueField hmr 10
 
@@ -93,11 +93,14 @@ search valueField cache fuel
   | fuel <= 0 =
     (undefined,) <$> staticScore valueField
   | otherwise = do
+    roboPos <- access llPosL
+    val <- unsafeReadF valueField roboPos
+    let choices= "LRUDWSA"
     st <- get
     ok <- liftIO $ addCacheEntry cache st
     if ok
       then do
-      best "LRUDWSA" $ \mov -> do
+      best choices $ \mov -> do
         mb <- score
         -- liftIO $ putStrLn $ "fuel: " ++ show fuel ++ ", mov: " ++ [mov]
         -- showStatus

@@ -19,7 +19,7 @@ import AI.Common
 import DefaultMain
 import LL
 import AI.GorinNoSho
-
+import AI.Oracle
 
 minf :: Int
 minf = -10^(9::Int)

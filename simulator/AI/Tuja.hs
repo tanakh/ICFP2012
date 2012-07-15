@@ -24,6 +24,7 @@ import qualified Data.Vector.Generic.Mutable as GM
 import System.IO
 import System.Process
 import System.Posix.Time
+import System.Posix.Signals
 import System.Posix.Unistd
 import System.FilePath
 import Text.Printf
@@ -99,21 +100,31 @@ ninjaMain opt startTime txt = do
   submitQ <- newTQueueIO
   bestTejun <- newTVarIO $ Tejun 0 Abort "A"
   population <- newTVarIO $ 0
+  counter  <- newTVarIO $ 0
   learnedConfigs <- read <$> readFile "learned.txt"
-  forkIO $ launcher population submitQ learnedConfigs txt
+  forkIO $ launcher population  counter submitQ learnedConfigs txt
   forkIO $ collector opt submitQ bestTejun
-  waitOhagi opt startTime bestTejun
+  termFlag <- newTVarIO False
+  let hdlr = atomically $ writeTVar termFlag True
+  installHandler sigINT (Catch hdlr) Nothing
+  waitOhagi opt startTime bestTejun termFlag
 
 
-launcher population submitQ learnedConfigs txt = forever $ do
+launcher population counter submitQ learnedConfigs txt = forever $ do
   pop <- atomically $ readTVar population
   when (pop < 30) $ do
     res0 <- initResource
     let res = res0 { submitter = \x -> atomically $ writeTQueue submitQ x}
     let l2 :: [Config]
         l2 = learnedConfigs
-    config <- randomConfig theRecipe
-    -- config <- choose learnedConfigs
+    ctr <- atomically $ readTVar counter
+    config0 <- randomConfig theRecipe
+    config1 <- choose learnedConfigs
+    let config 
+           | ctr==0   = normalConfig 
+           | even ctr = config0
+           | True     = config1
+    atomically $ modifyTVar counter (1+)
     forkIO $ do
       atomically $ modifyTVar population (1+)
       runLLT txt $ simpleSolver res config '_'
@@ -129,15 +140,16 @@ collector opt submitQ bestTejun = forever $do
     hPutStrLn stderr $ "receive " ++ show tejun
     hPutStrLn stderr $ "my best " ++ show best
 
-waitOhagi opt startTime bestTejun = do
+waitOhagi opt startTime bestTejun termFlag = do
   t <- getCurrentTime
+  term <- atomically $ readTVar termFlag
   case () of
-    _ | t > startTime + Option.timeout opt -2 -> do
+    _ | term || t > startTime + Option.timeout opt -2 -> do
           Tejun _ _ str <- atomically $ readTVar bestTejun
           putStrLn str
       | otherwise -> do
           sleep 1
-          waitOhagi opt startTime bestTejun
+          waitOhagi opt startTime bestTejun termFlag
 
 
 isEffectiveMove :: (Functor m, MonadIO m) => Set.Set Word64 -> Char -> LLT m Bool

@@ -98,7 +98,8 @@ randomConfig :: Recipe -> IO Config
 randomConfig r =
   Config <$> randomSearchAtom r <*> randomMany (weightAtomNum r) (randomWindAtom1 r)
 
-
+normalConfig :: Config
+normalConfig = Config [normalSearchAtom] []
 
 choose :: [a] -> IO a
 choose xs = do

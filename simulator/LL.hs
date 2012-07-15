@@ -202,6 +202,8 @@ showStatus = do
         ( intercalate ", "
           $ map (\(f, (t, _, _)) -> [f] ++ "->" ++ [t]) llTramp )
 
+    printf "hash: %016X\n" llHash
+
   showBoard
 
 showBoard :: MonadIO m => LLT m ()
@@ -281,7 +283,9 @@ simulateStep mv = do
 
     diff <- liftIO $ readIORef rlog
     let hash = foldl' xor 0 $ map (\(p, c) -> hashChar p c) diff
-    void $ llPatchesL %= \(p:ps) -> (p { pBoardDiff = diff, pHash = hash }:ps)
+    llHashL %= xor hash
+    llPatchesL %= \(p:ps) -> (p { pBoardDiff = diff, pHash = hash }:ps)
+    return ()
 
   llStepL += 1
   return ()

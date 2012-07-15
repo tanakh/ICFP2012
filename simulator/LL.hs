@@ -14,8 +14,7 @@ module LL (
   forPos, loopPos,
 
   whenInBoundPos,
-  readCell, readCellM, readPos, readPosM,
-  writeCell, writePos,
+  readPos, readPosM, writePos,
 
   backupState, withBackup,
   showStatus, showBoard,
@@ -85,7 +84,7 @@ runLLT fld bdl m = do
   (cx, cy) <- iterateLoopT 0 $ \y -> do
     iterateLoopT 0 $ \x -> do
       when (x >= w) exit
-      c <- readCell bd x y
+      c <- readPos bd $ Pos x y
       when (c == 'R') $ lift $ exitWith (x, y)
       return $ x+1
     return $ y+1
@@ -93,7 +92,7 @@ runLLT fld bdl m = do
   (cxLift, cyLift) <- iterateLoopT 0 $ \y -> do
     iterateLoopT 0 $ \x -> do
       when (x >= w) exit
-      c <- readCell bd x y
+      c <- readPos bd $ Pos x y
       when (c == 'L') $ lift $ exitWith (x, y)
       return $ x+1
     return $ y+1
@@ -102,7 +101,7 @@ runLLT fld bdl m = do
     ior <- newIORef 0
     forM_ [0..h-1] $ \y -> do
       forM_ [0..w-1] $ \x -> do
-        c <- readCell bd x y
+        c <- readPos bd $ Pos x y
         when (c == '\\') $ modifyIORef ior (+1)
     readIORef ior
 
@@ -110,7 +109,7 @@ runLLT fld bdl m = do
     rr <- newIORef []
     forM_ [0..h-1] $ \y -> do
       forM_ [0..w-1] $ \x -> do
-        c <- readCell bd x y
+        c <- readPos bd $ Pos x y
         when (c == '*') $ modifyIORef rr (Pos x y:)
     reverse <$> readIORef rr
   vrocks <- liftIO $ V.thaw $ V.fromList rocks
@@ -187,7 +186,7 @@ showBoard = do
   liftIO $ do
     forM_ [h-1, h-2 .. 0] $ \y -> do
       forM_ [0..w-1] $ \x -> do
-        hPutChar stderr =<< readCell bd x y
+        hPutChar stderr =<< readPos bd (Pos x y)
       hPutStrLn stderr $ if y < wl then "~~~~" else "    "
 
 type Solver m = LLT m Ans.Ans
@@ -414,15 +413,6 @@ loopPos m = do
   foreach [ Pos x y | y <- [0..h-1], x <- [0..w-1] ] $ \pos -> do
     m pos
 
-whenInBound :: (U.Unbox x, MonadIO m)
-               => Field x -> Int -> Int -> a -> IO a -> m a
-whenInBound bd x y def action = liftIO $ do
-  let h = GM.length bd
-  w <- GM.length <$> GM.read bd 0
-  if x >= 0 && x < w && y >= 0 && y < h
-    then action
-    else return def
-
 whenInBoundPos :: (U.Unbox x, MonadIO m)
                   => Field x -> Pos -> a -> IO a -> m a
 whenInBoundPos bd (Pos x y) def action = liftIO $ do
@@ -432,26 +422,17 @@ whenInBoundPos bd (Pos x y) def action = liftIO $ do
     then action
     else return def
 
-readCell :: (Functor m, MonadIO m) => Board -> Int -> Int -> m Char
-readCell bd x y = fromMaybe '#' <$> readCellM bd x y
+readPos :: (Functor m, MonadIO m) => Board -> Pos -> m Char
+readPos bd p = fromMaybe '#' <$> readPosM bd p
 
-readCellM :: (MonadPlus f, MonadIO m) => Board -> Int -> Int -> m (f Char)
-readCellM bd x y = whenInBound bd x y mzero $ do
+readPosM :: (MonadPlus f, MonadIO m) => Board -> Pos -> m (f Char)
+readPosM bd p@(Pos x y) = whenInBoundPos bd p mzero $ do
   row <- GM.read bd y
   return <$> GM.read row x
 
-readPos :: (Functor m, MonadIO m) => Board -> Pos -> m Char
-readPos bd (Pos x y) = readCell bd x y
-
-readPosM :: (MonadPlus f, MonadIO m) => Board -> Pos -> m (f Char)
-readPosM bd (Pos x y) = readCellM bd x y
-
-writeCell :: MonadIO m => Board -> Int -> Int -> Char -> m ()
-writeCell bd x y v = whenInBound bd x y () $ do
+writePos :: MonadIO m => Board -> Pos -> Char -> m ()
+writePos bd p@(Pos x y) v = whenInBoundPos bd p () $ do
   row <- GM.read bd y
   GM.write row x v
-
-writePos :: MonadIO m => Board -> Pos -> Char -> m ()
-writePos bd (Pos x y) v = writeCell bd x y v
 
 ll = lift . lift

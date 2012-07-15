@@ -15,7 +15,7 @@ build-type:          Simple
 cabal-version:       >=1.8
 
 library
-  ghc-options:         -O2 -auto-all
+  ghc-options:         -O2 
   exposed-modules:     Ans
                        AI.Common
                        AI.Cooking
@@ -85,7 +85,7 @@ executable ll-ai-greedy3
   buildable:           False
 
 executable ll-ai-bf
-  ghc-options:         -O2 -auto-all -rtsopts
+  ghc-options:         -O2 
   hs-source-dirs:      dist
   main-is:             ../AI/BF.hs
   build-depends:       base ==4.5.*, simulator

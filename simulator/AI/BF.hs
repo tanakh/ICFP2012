@@ -4,6 +4,8 @@ module Main (main) where
 
 import Control.Applicative
 import Control.Monad
+
+import Control.Concurrent.STM
 import Control.Monad.State
 import Control.Monad.Trans
 import qualified Data.HashMap.Strict as HM
@@ -162,11 +164,12 @@ main = do
   valueFieldRef <- newIORef undefined
   loveFieldRef <- newIORef undefined
   hashLogRef <- newIORef []
-  yomiRef <- newIORef 0
+  yomiRef <- newIORef (-1)
   let inputfn = case Option.input opt of
             Option.InputFile fp -> fp
             Option.Stdin -> "STDIN"
   oracle <- Oracle.new inputfn
+
 
   when (Option.oracleSource opt/= "") $ do
     Oracle.load oracle $ Option.oracleSource opt
@@ -187,7 +190,9 @@ main = do
     itemLoveAmp <- liftIO $ Oracle.ask oracle "itemLoveAmp" $ return (0.0:: Double)
     placeLoveAmp <- liftIO $ Oracle.ask oracle "placeLoveAmp" $ return (0.0:: Double)
     placeLoveNum <- liftIO $ Oracle.ask oracle "placeLoveNum" $ return (0.0:: Double)
-    liftIO $ modifyIORef yomiRef (1+)
+    tetete@(Tejun osco _ _ ) <- atomically $ readTVar (Oracle.tejunVar oracle)
+    liftIO $ modifyIORef yomiRef (\x -> (if osco <= 10 && x <= 10 then (2+x) else (1+x)) )
+    yomi <- liftIO $ readIORef yomiRef
     --- start of One Challenge
     defaultMain txt oracle $ do
       step <- access llStepL

@@ -31,7 +31,7 @@ data LLState
     , llGrowth       :: {-# UNPACK #-} !Int
 
       -- current state
-    , llResult       :: {-# UNPACK #-} !Result
+    , llResult       :: !Result
     , llStep         :: {-# UNPACK #-} !Int
     , llPos          :: {-# UNPACK #-} !Pos
     , llLambdas      :: {-# UNPACK #-} !Int
@@ -51,7 +51,7 @@ data LLState
 data LLPatch
   = LLPatch
     { pMove        :: {-# UNPACK #-} !Char
-    , pPrevResult  :: {-# UNPACK #-} !Result
+    , pPrevResult  :: !Result
     , pPrevPos     :: {-# UNPACK #-} !Pos
     , pPrevLambdas :: {-# UNPACK #-} !Int
     , pPrevRocks   :: ![Pos]

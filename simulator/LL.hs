@@ -11,6 +11,7 @@ module LL (
 
   -- exec step, and undo
   simulateStep, undo,
+  withStep,
   isEnd, score, abortScore, deadScore, winScore,
 
   -- aux
@@ -192,8 +193,8 @@ showBoard = do
   let wl = Flood.waterLevel llStep llFlood
   liftIO $ do
     forM_ [h-1, h-2 .. 0] $ \y -> do
-      hPutStr stderr =<< forM [0..w-1] (\x -> readPos llBoard $ Pos x y)
-      hPutStrLn stderr $ if y < wl then "~~~~" else "    "
+      putStr =<< forM [0..w-1] (\x -> readPos llBoard $ Pos x y)
+      putStrLn $ if y < wl then "~~~~" else "    "
 
 getReplay :: (Functor m, MonadIO m) => LLT m String
 getReplay = reverse . map pMove <$> access llPatchesL
@@ -226,6 +227,13 @@ simulate interactive txt solver = runLLT txt go where
         return (res, sc, replay)
 
 -- simualte and undo
+
+withStep :: (Functor m, MonadIO m) => Char -> LLT m a -> LLT m a
+withStep mv m = do
+  simulateStep mv
+  ret <- m
+  undo
+  return ret
 
 simulateStep :: (Functor m, MonadIO m) => Char -> LLT m ()
 simulateStep mv = do

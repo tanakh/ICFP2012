@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses, UndecidableInstances #-}
-{-# LANGUAGE RecordWildCards, ViewPatterns #-}
+{-# LANGUAGE RecordWildCards, ViewPatterns, BangPatterns #-}
 
 module LL (
   -- simulate whole game
@@ -254,6 +254,7 @@ withStep mv m = do
   ret <- m
   undo
   return ret
+{-# INLINEABLE withStep #-}
 
 simulateStep :: (Functor m, MonadIO m) => Char -> LLT m ()
 simulateStep mv = do
@@ -265,27 +266,27 @@ simulateStep mv = do
     return ()
 
     else do
-    wlog <- liftIO $ newIORef []
-    xlog <- liftIO $ newIORef []
-    rlog <- liftIO $ newIORef []
     bd <- access llBoardL
+
+    wlog <- liftIO $ newIORef []
+    rlog <- liftIO $ newIORef []
+    xlog <- liftIO $ newIORef 0
 
     let write p v = do
           c <- readPos bd p
-          liftIO $ modifyIORef rlog $ ((p, c):)
-          liftIO $ modifyIORef wlog $ ((p, v):)
-        commit = liftIO $ do
+          modifyIORef rlog $ ((p, c):)
+          modifyIORef wlog $ ((p, v):)
+          modifyIORef xlog (`xor` (hashChar p v `xor` hashChar p c))
+        commit = do
           wl <- readIORef wlog
           forM_ (reverse wl) $ \(p, v) -> writePos bd p v
-          modifyIORef xlog $ (wl++)
           writeIORef wlog []
 
-    moveC mv write >> commit
+    moveC mv write >> liftIO commit
     update write commit
 
     diff <- liftIO $ readIORef rlog
-    eiff <- liftIO $ readIORef xlog
-    let hash = foldl' xor 0 $ map (\(p, c) -> hashChar p c) $ diff ++ eiff
+    hash <- liftIO $ readIORef xlog
     llHashL %= xor hash
     llPatchesL %= \(p:ps) -> (p { pBoardDiff = diff, pHash = hash }:ps)
     return ()
@@ -293,10 +294,10 @@ simulateStep mv = do
   llStepL += 1
   return ()
 
-type WriteLogger m = Pos -> Char -> LLT m ()
-type Commit m = LLT m ()
+type WriteLogger = Pos -> Char -> IO ()
+type Commit = IO ()
 
-moveC :: (MonadIO m, Functor m) => Char -> WriteLogger m -> LLT m ()
+moveC :: (MonadIO m, Functor m) => Char -> WriteLogger -> LLT m ()
 moveC c = case c of
   'L' -> move $ Pos (-1) 0
   'R' -> move $ Pos 1    0
@@ -309,7 +310,7 @@ moveC c = case c of
 isRock :: Char -> Bool
 isRock c = c == '*' || c == '@'
 
-move :: (MonadIO m, Functor m) => Pos -> WriteLogger m -> LLT m ()
+move :: (MonadIO m, Functor m) => Pos -> WriteLogger -> LLT m ()
 move d@(Pos _ dy) wlog = do
   LLState {..} <- get
 
@@ -317,14 +318,14 @@ move d@(Pos _ dy) wlog = do
       p1 = p0 + d
       p2 = p1 + d
 
-  c1 <- readPos llBoard p1
-  c2 <- readPos llBoard p2
+  c1 <- liftIO $ readPos llBoard p1
+  c2 <- liftIO $ readPos llBoard p2
 
   case () of
     _ | c1 `elem` " .O\\!" -> do
         -- move to empty space
-        wlog p0 ' '
-        wlog p1 'R'
+        liftIO $ wlog p0 ' '
+        liftIO $ wlog p1 'R'
         when (c1 == '\\') $ void $ llLambdasL += 1
         when (c1 == 'O')  $ void $ llResultL ~= Win
         when (c1 == '!')  $ void $ llRazorsL += 1
@@ -332,19 +333,19 @@ move d@(Pos _ dy) wlog = do
         return ()
       | dy == 0 && isRock c1 && c2 == ' ' -> do
         -- push rock
-        wlog p0 ' '
-        wlog p1 'R'
-        wlog p2 c1
+        liftIO $ wlog p0 ' '
+        liftIO $ wlog p1 'R'
+        liftIO $ wlog p2 c1
         llPosL ~= p1
         llRockPosL %= map (\p -> if p == p1 then p2 else p)
         return ()
       | c1 `elem` ['A' .. 'I'] -> do
         -- move to trampoline
         let Just (_, to, erases) = lookup c1 llTramp
-        wlog p0 ' '
-        wlog p1 ' '
-        wlog to 'R'
-        forM_ erases $ \tp -> wlog tp ' '
+        liftIO $ wlog p0 ' '
+        liftIO $ wlog p1 ' '
+        liftIO $ wlog to 'R'
+        liftIO $ forM_ erases $ \tp -> wlog tp ' '
         llPosL ~= to
         return ()
       | otherwise -> do
@@ -354,12 +355,12 @@ adjacent :: [Pos]
 adjacent =
   [ Pos x y | x <- [-1 .. 1], y <- [-1 .. 1], not $ x == 0 && y == 0 ]
 
-shave :: (MonadIO m, Functor m) => WriteLogger m -> LLT m ()
+shave :: (MonadIO m, Functor m) => WriteLogger -> LLT m ()
 shave wlog = do
   LLState {..} <- get
   when (llRazors > 0) $ do
     llRazorsL -= 1
-    forM_ adjacent $ \d -> do
+    liftIO $ forM_ adjacent $ \d -> do
       let np = llPos + d
       cell <- readPos llBoard np
       when (cell == 'W') $ wlog np ' '
@@ -367,12 +368,12 @@ shave wlog = do
 sortp :: [Pos] -> [Pos]
 sortp = sortBy (comparing $ \(Pos x y) -> (y, x))
 
-update :: (Functor m, MonadIO m) => WriteLogger m -> Commit m -> LLT m ()
+update :: (Functor m, MonadIO m) => WriteLogger -> Commit -> LLT m ()
 update wlog commit = do
   LLState {..} <- get
 
   -- before update, what is above of robot?
-  bup <- readPos llBoard $ llPos + Pos 0 1
+  bup <- liftIO $ readPos llBoard $ llPos + Pos 0 1
 
   let growing = llStep `mod` llGrowth == llGrowth - 1
 
@@ -380,34 +381,36 @@ update wlog commit = do
     if not growing then return llRockPos
     else sortp . (llRockPos ++) . map fst <$> searchBoard (=='W')
 
-  newRocks <- forM cands $ \p -> do
+  dior <- liftIO $ newIORef False
+
+  newRocks <- liftIO $ forM cands $ \ !p -> do
     -- la [ca] ra
     -- lb  cb  rb
     -- lc  cc  rc
-    let pla = p + Pos (-1) 0
-        plb = p + Pos (-1) (-1)
-        plc = p + Pos (-1) (-2)
-        pca = p + Pos 0    0
-        pcb = p + Pos 0    (-1)
-        pcc = p + Pos 0    (-2)
-        pra = p + Pos 1    0
-        prb = p + Pos 1    (-1)
-        prc = p + Pos 1    (-2)
+    let !pla = p + Pos (-1) 0
+        !plb = p + Pos (-1) (-1)
+        !plc = p + Pos (-1) (-2)
+        !pca = p + Pos 0    0
+        !pcb = p + Pos 0    (-1)
+        !pcc = p + Pos 0    (-2)
+        !pra = p + Pos 1    0
+        !prb = p + Pos 1    (-1)
+        !prc = p + Pos 1    (-2)
 
-    la <- readPos llBoard pla
-    lb <- readPos llBoard plb
-    lc <- readPos llBoard plc
-    ca <- readPos llBoard pca
-    cb <- readPos llBoard pcb
-    cc <- readPos llBoard pcc
-    ra <- readPos llBoard pra
-    rb <- readPos llBoard prb
-    rc <- readPos llBoard prc
+    !la <- readPos llBoard pla
+    !lb <- readPos llBoard plb
+    !lc <- readPos llBoard plc
+    !ca <- readPos llBoard pca
+    !cb <- readPos llBoard pcb
+    !cc <- readPos llBoard pcc
+    !ra <- readPos llBoard pra
+    !rb <- readPos llBoard prb
+    !rc <- readPos llBoard prc
 
     case () of
       _ | ca == 'W' -> do
             forM_ adjacent $ \((pca+) -> pw) -> do
-              cell <- readPos llBoard pw
+              !cell <- readPos llBoard pw
               when (cell == ' ') $ wlog pw 'W'
             return pca
 
@@ -415,46 +418,47 @@ update wlog commit = do
           cb == ' ' -> do
             wlog pca ' '
             wlog pcb $ if ca == '@' && cc /= ' ' then '\\' else ca
-            when (cc == 'R') $ void $ llResultL ~= Dead
+            when (cc == 'R') $ writeIORef dior True
             return pcb
         | isRock ca && ra == ' ' &&
           isRock cb && rb == ' ' -> do
             wlog pca ' '
             wlog prb $ if ca == '@' && rc /= ' ' then '\\' else ca
-            when (rc == 'R') $ void $ llResultL ~= Dead
+            when (rc == 'R') $ writeIORef dior True
             return prb
         | la == ' ' && isRock ca &&
           lb == ' ' && isRock cb -> do
             wlog pca ' '
             wlog plb $ if ca == '@' && lc /= ' ' then '\\' else ca
-            when (lc == 'R') $ void $ llResultL ~= Dead
+            when (lc == 'R') $ writeIORef dior True
             return plb
         | isRock ca  && ra == ' ' &&
           cb == '\\' && rb == ' ' -> do
             wlog pca ' '
             wlog prb $ if ca == '@' && rc /= ' ' then '\\' else ca
-            when (rc == 'R') $ void $ llResultL ~= Dead
+            when (rc == 'R') $ writeIORef dior True
             return prb
 
       _ ->
         return pca
 
   -- lambda complete!
-  when (llLambdas == llTotalLambdas) $ do
+  liftIO $ when (llLambdas == llTotalLambdas) $ do
     wlog llLiftPos 'O'
 
   -- before check some kind of thins, do commit
-  commit
+  liftIO commit
 
   -- sanitize rocks' pos
-  newRocks' <-
+  newRocks' <- liftIO $
     filterM (\p -> isRock <$> readPos llBoard p) newRocks
 
   -- rocks must be sorted
   llRockPosL ~= sortp newRocks'
 
-  cup <- readPos llBoard $ llPos + Pos 0 1
-  when (not (isRock bup) && isRock cup) $ do
+  cup <- liftIO $ readPos llBoard $ llPos + Pos 0 1
+  dead <- liftIO $ readIORef dior
+  when (dead || not (isRock bup) && isRock cup) $ do
     -- Totuzen no DEATH!!
     void $ llResultL ~= Dead
 
@@ -564,29 +568,31 @@ loopPos m = do
   foreach [ Pos x y | y <- [0..h-1], x <- [0..w-1] ] $ \pos -> do
     m pos
 
-whenInBoundPos :: U.Unbox x => Field x -> Pos -> a -> IO a -> IO a
+whenInBoundPos :: U.Unbox x => Field x -> Pos -> a -> (x -> IO a) -> IO a
 whenInBoundPos bd (Pos x y) def action = do
-  let h = GM.length bd
-  w <- GM.length <$> GM.unsafeRead bd 0
-  if x >= 0 && x < w && y >= 0 && y < h
-    then action
+  if y >= 0 && y < GM.length bd
+    then do
+    row <- GM.unsafeRead bd y
+    if x >= 0 && x < GM.length row
+      then action =<< GM.unsafeRead row x
+      else return def
     else return def
 {-# INLINEABLE whenInBoundPos #-}
 
-readPos :: (Functor m, MonadIO m) => Board -> Pos -> m Char
-readPos bd p = fromMaybe '#' <$> readPosM bd p
+readPos :: Board -> Pos -> IO Char
+readPos bd p = whenInBoundPos bd p '#' return
 {-# INLINEABLE readPos #-}
 
-readPosM :: (MonadPlus f, MonadIO m) => Board -> Pos -> m (f Char)
-readPosM bd p@(Pos x y) = liftIO $ whenInBoundPos bd p mzero $ do
-  row <- GM.unsafeRead bd y
-  return <$> GM.unsafeRead row x
+readPosM :: MonadPlus f => Board -> Pos -> IO (f Char)
+readPosM bd p = whenInBoundPos bd p mzero $ return . return
 {-# INLINEABLE readPosM #-}
 
 writePos :: MonadIO m => Board -> Pos -> Char -> m ()
-writePos bd p@(Pos x y) v = liftIO $ whenInBoundPos bd p () $ do
-  row <- GM.unsafeRead bd y
-  GM.unsafeWrite row x v
+writePos bd (Pos x y) v = liftIO $ do
+  when (y >= 0 && y < GM.length bd) $ do
+    row <- GM.unsafeRead bd y
+    when (x >= 0 && x < GM.length row) $
+      GM.unsafeWrite row x v
 {-# INLINEABLE writePos #-}
 
 searchBoard :: MonadIO m => (Char -> Bool) -> LLT m [(Pos, Char)]

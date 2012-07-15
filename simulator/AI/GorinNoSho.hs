@@ -42,10 +42,10 @@ unsafeWriteF :: (U.Unbox a, MonadIO m)=>Field a -> Pos -> a -> m ()
 unsafeWriteF bd r val = liftIO $ unsafeWriteFIO bd r val
 
 readFList :: (MonadIO m, U.Unbox a) => Field a -> Pos -> m [a]
-readFList bd r = liftIO $ whenInBoundPos bd r [] ((:[]) <$> unsafeReadF bd r)
+readFList bd r = liftIO $ whenInBoundPos bd r [] (return . (:[]))
 
 writeF :: (MonadIO m, U.Unbox a) => Field a -> Pos -> a -> m ()
-writeF bd r val = liftIO $ whenInBoundPos bd r () (unsafeWriteF bd r val)
+writeF bd r val = liftIO $ whenInBoundPos bd r () (\_ -> unsafeWriteF bd r val)
 
 convertF :: (U.Unbox a, U.Unbox b, MonadIO m)
             => Field a -> (a->b) -> LLT m (Field b)
@@ -125,7 +125,7 @@ dijkstra field sourceStr passableStr initVal = do
   bd <- access llBoardL
   probes <- liftIO $ newIORef $ Q.empty
   forPos $ \ r -> do
-    a <- normalize <$> readPos bd r
+    a <- liftIO $ normalize <$> readPos bd r
     case a of
       _ | a `elem` sourceStr   -> do
            liftIO $ modifyIORef probes $ Q.insert (initVal, r)

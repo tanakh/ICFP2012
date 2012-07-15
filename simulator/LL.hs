@@ -102,13 +102,13 @@ deadScore = do
 -----
 
 pr1, pr2, pr3 :: Word64
-pr1 = 268435456 + 3
-pr2 = 536870912 + 11
-pr3 = 1073741824 + 85
+pr1 = 78123748972741237
+pr2 = 8341975094375872387
+pr3 = 67463278932786926713
 
 hashChar :: Pos -> Char -> Word64
 hashChar (Pos x y) c = do
-  (fromIntegral x * pr1 + fromIntegral y) * pr2 +
+  fromIntegral x * pr1 + fromIntegral y * pr2 +
     fromIntegral (fromEnum c) * pr3
 
 runLLT :: MonadIO m => String -> LLT m a -> m a
@@ -266,6 +266,7 @@ simulateStep mv = do
 
     else do
     wlog <- liftIO $ newIORef []
+    xlog <- liftIO $ newIORef []
     rlog <- liftIO $ newIORef []
     bd <- access llBoardL
 
@@ -276,13 +277,15 @@ simulateStep mv = do
         commit = liftIO $ do
           wl <- readIORef wlog
           forM_ (reverse wl) $ \(p, v) -> writePos bd p v
+          modifyIORef xlog $ (wl++)
           writeIORef wlog []
 
     moveC mv write >> commit
     update write commit
 
     diff <- liftIO $ readIORef rlog
-    let hash = foldl' xor 0 $ map (\(p, c) -> hashChar p c) diff
+    eiff <- liftIO $ readIORef xlog
+    let hash = foldl' xor 0 $ map (\(p, c) -> hashChar p c) $ diff ++ eiff
     llHashL %= xor hash
     llPatchesL %= \(p:ps) -> (p { pBoardDiff = diff, pHash = hash }:ps)
     return ()

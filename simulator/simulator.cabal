@@ -88,6 +88,7 @@ executable ll-ai-bf
   main-is:             ../AI/BF.hs
   build-depends:       base ==4.5.*, simulator
                      , vector, data-lens-fd, mtl, control-monad-loop, stm
+                     , unordered-containers
   buildable:           True
 
 executable ll-ai-tuja

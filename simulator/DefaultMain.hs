@@ -75,6 +75,5 @@ defaultMain oracle theSolver = do
          score
          (take 6 $ show $ md5 $ L.pack replay))
         replay
-
-  when (Option.verbose opt) $ do
-    putStrLn replay
+  -- honban you shutsuryoku
+  putStrLn replay

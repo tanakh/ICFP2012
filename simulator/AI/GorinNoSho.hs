@@ -42,10 +42,10 @@ unsafeWriteF :: (U.Unbox a, MonadIO m)=>Field a -> Pos -> a -> m ()
 unsafeWriteF bd r val = liftIO $ unsafeWriteFIO bd r val
 
 readFList :: (MonadIO m, U.Unbox a) => Field a -> Pos -> m [a]
-readFList bd r = whenInBoundPos bd r [] ((:[]) <$> unsafeReadF bd r)
+readFList bd r = liftIO $ whenInBoundPos bd r [] ((:[]) <$> unsafeReadF bd r)
 
 writeF :: (MonadIO m, U.Unbox a) => Field a -> Pos -> a -> m ()
-writeF bd r val = whenInBoundPos bd r () (unsafeWriteF bd r val)
+writeF bd r val = liftIO $ whenInBoundPos bd r () (unsafeWriteF bd r val)
 
 convertF :: (U.Unbox a, U.Unbox b, MonadIO m)
             => Field a -> (a->b) -> LLT m (Field b)
@@ -120,7 +120,7 @@ wideShow width val
     cut x = x
 
 dijkstra :: (MonadIO m, Functor m, Terrain a, U.Unbox a) =>
-            Field a -> String -> String -> a -> LLT m (Field a)
+            Field a -> String -> String -> a -> LLT m ()
 dijkstra field sourceStr passableStr initVal = do
   bd <- access llBoardL
   probes <- liftIO $ newIORef $ Q.empty
@@ -143,7 +143,7 @@ dijkstra field sourceStr passableStr initVal = do
         newVals <- readFList field nr
         forM_ newVals $ \ _ -> do
           liftIO $ modifyIORef probes $ Q.insert (terrainSucc val, nr)
-  return field
+  return ()
     where
       normalize c
         | c `elem` "123456789" = '1'

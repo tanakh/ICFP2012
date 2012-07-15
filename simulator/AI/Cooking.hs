@@ -35,7 +35,9 @@ theRecipe = Recipe
     searchAtomNum = 3,
     weightAtomNum = 5,
     possiblySource   = "O\\*" ,
-    possiblyPass = " .\\*"
+    possiblyPass = " .\\*",
+    powerMin = -1,
+    powerMax = -1
          }
  
 allChars = "R*L.#\\O @!WA1"
@@ -60,6 +62,8 @@ randomRecipe1 = Recipe
   <*> randomRIO (0, 20) 
   <*> (choose $ powerset1 $ allChars)
   <*> (choose $ powerset1 $ allChars)
+  <*> randomRIO (-4, 2) 
+  <*> randomRIO (-4, 2) 
 data Recipe = 
   Recipe {
     windFreqMin :: Double,
@@ -70,7 +74,9 @@ data Recipe =
     searchAtomNum :: Double,
     weightAtomNum :: Double,
     possiblySource :: String,
-    possiblyPass :: String
+    possiblyPass :: String,
+    powerMin :: Double,
+    powerMax :: Double
          }
 
 data Config = 
@@ -79,7 +85,8 @@ data Config =
     searchAtom :: 
        [(Wave, -- weight
          String, -- source terrains
-         String  -- passable terrains
+         String,  -- passable terrains
+         Double -- power law index
         )],
     windAtom ::
        [(Wave, -- weight
@@ -99,9 +106,9 @@ choose xs = do
   return $ xs !! i
 
 normalSearchAtom = 
-    (Wave [(2.302, 0, 0)], "\\O", " .")
+    (Wave [(2.302, 0, 0)], "\\O", " .", -1)
 
-randomSearchAtom :: Recipe -> IO [(Wave, String, String)]
+randomSearchAtom :: Recipe -> IO [(Wave, String, String, Double)]
 randomSearchAtom r = 
   (normalSearchAtom :) <$> randomMany (searchAtomNum r) (randomSearchAtom1 r)
 
@@ -112,7 +119,8 @@ randomSearchAtom1 r = do
   w <- randomWeight r
   src <- choose $ powerset1 $ possiblySource r
   pass <- choose $ powerset1 $ possiblyPass r
-  return (w, src, pass)
+  pow <- randomRIO (powerMin r, powerMax r)
+  return (w, src, pass, pow)
 
 randomWindAtom1 r = do
   w <- randomWeight r

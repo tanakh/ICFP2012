@@ -376,21 +376,25 @@ update wlog commit = do
           cb == ' ' -> do
             wlog pca ' '
             wlog pcb $ if ca == '@' && cc /= ' ' then '\\' else ca
+            when (cc == 'R') $ void $ llResultL ~= Dead
             return pcb
         | isRock ca && ra == ' ' &&
           isRock cb && rb == ' ' -> do
             wlog pca ' '
             wlog prb $ if ca == '@' && rc /= ' ' then '\\' else ca
+            when (rc == 'R') $ void $ llResultL ~= Dead
             return prb
         | la == ' ' && isRock ca &&
           lb == ' ' && isRock cb -> do
             wlog pca ' '
             wlog plb $ if ca == '@' && lc /= ' ' then '\\' else ca
+            when (lc == 'R') $ void $ llResultL ~= Dead
             return plb
         | isRock ca  && ra == ' ' &&
           cb == '\\' && rb == ' ' -> do
             wlog pca ' '
             wlog prb $ if ca == '@' && rc /= ' ' then '\\' else ca
+            when (rc == 'R') $ void $ llResultL ~= Dead
             return prb
 
       _ ->
@@ -411,10 +415,8 @@ update wlog commit = do
   llRockPosL ~= sortp newRocks'
 
   cup <- readPos llBoard $ llPos + Pos 0 1
-  when ( not (isRock bup) && isRock cup
-       || bup /= '\\' && cup == '\\') $ do
+  when (not (isRock bup) && isRock cup) $ do
     -- Totuzen no DEATH!!
-    -- FIXME: I'm not sure this is correct
     void $ llResultL ~= Dead
 
   let wl = Flood.waterLevel llStep llFlood

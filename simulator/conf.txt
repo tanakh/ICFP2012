@@ -1,0 +1,4 @@
+# Oracle
+# Configuration File.
+# Only The Fourth Line is important.
+fromList [("bfDepth","10"),("combineBFFirst","True"),("greedyDepth","4")]

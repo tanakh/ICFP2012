@@ -49,8 +49,8 @@ submit oracle tejun = do
 load :: Oracle -> FilePath -> IO ()
 load oracle fn = do
    str <- readFile fn
-   let str2 = lines str !! 3
-   atomically $ writeTVar (dbVar oracle) (read str)
+   let str3 = lines str !! 3
+   atomically $ writeTVar (dbVar oracle) (read str3)
 
 save :: Oracle -> IO ()
 save oracle = do

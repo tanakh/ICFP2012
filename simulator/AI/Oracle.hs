@@ -61,8 +61,8 @@ save oracle = do
       dbstr = show db
   system $ "mkdir -p " ++ dirName
   writeFile fileName $ unlines
-    [show score,
-     show res,
+    [show score ++ " " ++ show res,
+     dropExtension $ takeFileName $ taskName oracle,
      rep,
      dbstr
     ]

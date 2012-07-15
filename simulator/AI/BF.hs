@@ -8,7 +8,9 @@ import Control.Monad.State
 import Control.Monad.Trans
 import qualified Data.HashMap.Strict as HM
 import Data.IORef
+import qualified Data.Vector.Mutable as VM
 import Data.List
+import qualified Data.HashSet as HS
 import Data.Lens
 import Data.Word
 import Data.Ord
@@ -52,39 +54,61 @@ addCacheEntry hmr st = do
     modifyIORef hmr $ HM.insertWith (++) (llHash st) [ce]
   return cm
 
-safetyCheck ::(Functor m,MonadIO m)=> Char -> LLT m Bool
-safetyCheck hand = withStep hand $ do
-  res <- access llResultL
-  return (res /= Dead)
-
+safetyCheck ::(Functor m,MonadIO m)=> HS.HashSet Word64 -> Int ->  Char -> LLT m Bool
+safetyCheck hist fuel hand 
+  | fuel <= 0 = withStep hand $ do
+                       res <- access llResultL
+                       h <- access llHashL
+                       return $ res /= Dead && not (HS.member h hist)
+  | otherwise = withStep hand $
+                     or <$> (forM "LRUD" $ safetyCheck hist (fuel-1))
 main :: IO ()
 main = do
   opt <- Option.parseIO
+  historyRef <- newIORef HS.empty
+  valueFieldRef <- newIORef undefined
   let inputfn = case Option.input opt of
             Option.InputFile fp -> fp
             Option.Stdin -> "STDIN"
   oracle <- Oracle.new inputfn
   defaultMain oracle $ do
-    valueField <- newF (0::Int)
-    dijkstra valueField "\\O" " .!\\R" 0
-    updateF valueField (\x -> max 0 $ 75-x)
-    hmr <- liftIO $ newIORef HM.empty
-    (mov, sc) <- withBackup $ search valueField hmr 10
-    
+    step <- access llStepL
     (liftIO . Oracle.submit oracle) =<< getAbortTejun
 
+    bfDepth <- liftIO $ Oracle.ask oracle "bfDepth" $ return 10
+    hmr <- liftIO $ newIORef HM.empty
+    hashNow <- access llHashL
+    liftIO $ modifyIORef historyRef $ HS.insert hashNow
+    history <- liftIO $ readIORef historyRef
+    (mov, sc) <- withBackup $ search undefined hmr bfDepth
+
+    greedyDepth <- liftIO $ Oracle.ask oracle "greedyDepth" $ return 4
+    valueField <- if step > 0 then liftIO $ readIORef valueFieldRef 
+                              else do 
+                                  ret <- newF (0::Int)
+                                  liftIO $ writeIORef valueFieldRef ret
+                                  return ret
+    dijkstra valueField "\\O" " .!\\R" 0
+    updateF valueField (\x -> max 0 $ 75-x)
     roboPos <- access llPosL
     val <- unsafeReadF valueField roboPos
-    mov2 <- if mov /= 'A' || val <= 0 
-               then return mov
-               else do
-                   cand <- forM "URLD" $ \hand -> do
-                         val3 <- unsafeReadF valueField $ roboPos + hand2pos hand
-                         flag <- safetyCheck hand
-                         return ((flag,val3), hand)
-                   return $ snd $ last $ sort $ cand
-    liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++ nub [mov,mov2]
-    return $ Ans.Cont mov2
+    (mov2, confidence) <-  do
+             cand <- forM "LRUD" $ \hand -> do
+                   val3 <- unsafeReadF valueField $ roboPos + hand2pos hand
+                   flag <- safetyCheck history greedyDepth hand 
+                   return ((flag,val3), hand)
+             let top = last $ sort $ cand
+             return $ (snd top {-move-}, fst (fst top) {-whether it was safe-})
+    
+    combineBFFirst <- liftIO $ Oracle.ask oracle "combineBFFirst" $ return True
+    let mov3 
+         | combineBFFirst && (mov /= 'A' || val <= 0) = mov
+         | combineBFFirst                             = mov2
+         | not (combineBFFirst) && confidence         = mov2
+         | otherwise                                  = mov
+
+    liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++  [mov,mov2]
+    return $ Ans.Cont mov3
 
 best :: (Functor m, MonadIO m)
         => [Char] -> (Char -> LLT m Int) -> LLT m (Char, Int)

@@ -52,6 +52,11 @@ addCacheEntry hmr st = do
     modifyIORef hmr $ HM.insertWith (++) (llHash st) [ce]
   return cm
 
+safetyCheck ::(Functor m,MonadIO m)=> Char -> LLT m Bool
+safetyCheck hand = withStep hand $ do
+  res <- access llResultL
+  return (res /= Dead)
+
 main :: IO ()
 main = do
   opt <- Option.parseIO
@@ -75,7 +80,8 @@ main = do
                else do
                    cand <- forM "URLD" $ \hand -> do
                          val3 <- unsafeReadF valueField $ roboPos + hand2pos hand
-                         return (val3, hand)
+                         flag <- safetyCheck hand
+                         return ((flag,val3), hand)
                    return $ snd $ last $ sort $ cand
     liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++ nub [mov,mov2]
     return $ Ans.Cont mov2

@@ -46,6 +46,12 @@ submit :: Oracle -> Tejun -> IO ()
 submit oracle tejun = do
   atomically $ modifyTVar (tejunVar oracle) $ max tejun
 
+load :: Oracle -> FilePath -> IO ()
+load oracle fn = do
+   str <- readFile fn
+   let str2 = lines str !! 3
+   atomically $ writeTVar (dbVar oracle) (read str)
+
 save :: Oracle -> IO ()
 save oracle = do
   db <- atomically $ readTVar (dbVar oracle)

@@ -10,7 +10,8 @@ data Option =
     replay :: Replay,
     verbose :: Bool,
     mode :: Mode,
-    timeout :: Int
+    timeout :: Int,
+    oracleSource :: String
   }
 
 data Input  = InputFile FilePath | Stdin deriving (Eq, Show)
@@ -65,6 +66,12 @@ parse = Option
           & transform read
           & value 160
           & help "Timeout before submitting the best answer")
+        <*> strOption (
+          long "oracle"
+          & short 'o'
+          & value ""
+          & help "cause oracle to read from specific file."
+            )
   where
     fa str = case str of
       "kbd"  -> Keyboard

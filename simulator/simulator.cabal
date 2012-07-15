@@ -92,6 +92,7 @@ executable ll-ai-bf
 
 
 
+
 executable ll-ai-tuja
   ghc-options:         -O3
   hs-source-dirs:      dist
@@ -100,4 +101,4 @@ executable ll-ai-tuja
                        , pqueue,vector, data-lens-fd, mtl, control-monad-loop
                        , stm, containers, unix, random,filepath, bytestring,pureMD5
                        , process
-                       
+

@@ -56,7 +56,7 @@ main = defaultMain $ do
   dijkstra valueField "\\O" " .*W!R" 0
   updateF valueField (75-)
   hmr <- liftIO $ newIORef HM.empty
-  (mov, sc) <- withBackup $ search valueField hmr  10
+  (mov, sc) <- withBackup $ search valueField hmr 10
   liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++ [mov]
   return $ Ans.Cont mov
 
@@ -76,7 +76,8 @@ best ls m = do
         return (x, r)
   return $ maximumBy (comparing snd) res
 
-search :: (MonadIO m, Functor m) => Field Int -> Cache -> Int -> LLT m (Char, Int)
+search :: (MonadIO m, Functor m)
+          => Field Int -> Cache -> Int -> LLT m (Char, Int)
 search valueField cache fuel
   | fuel <= 0 =
     (undefined,) <$> staticScore valueField
@@ -85,7 +86,7 @@ search valueField cache fuel
     ok <- liftIO $ addCacheEntry cache st
     if ok
       then do
-      best "LRUDSA" $ \mov -> do
+      best "LRUDWSA" $ \mov -> do
         mb <- score
         -- liftIO $ putStrLn $ "fuel: " ++ show fuel ++ ", mov: " ++ [mov]
         -- showStatus
@@ -97,12 +98,11 @@ search valueField cache fuel
 
 staticScore :: (MonadIO m, Functor m) => Field Int -> LLT m Int
 staticScore valueField = do
+  abortScore
+  {-
   aScore <- abortScore
   pos <- access llPosL
   futureScore <- unsafeReadF valueField pos
   step <- access llStepL
   return $ aScore + 0*step + futureScore
-
-
-
-
+  -}

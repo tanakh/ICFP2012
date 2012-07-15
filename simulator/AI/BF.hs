@@ -7,6 +7,7 @@ import Control.Monad
 import Control.Monad.Trans
 import Data.List
 import Data.Ord
+import System.IO
 
 import Ans
 import AI.Common
@@ -16,10 +17,10 @@ import LL
 main :: IO ()
 main = defaultMain bf
 
-bf :: (MonadIO m, Functor m) => Solver m
+bf :: Solver IO
 bf = do
   (mov, sc) <- search 6
-  liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++ [mov]
+  liftIO $ hPutStrLn stderr $ "score : " ++ show sc ++ ", move: " ++ [mov]
   return $ Ans.Cont mov
 
 search :: (MonadIO m, Functor m) => Int -> LLT m (Char, Int)
@@ -28,15 +29,14 @@ search fuel
     (undefined,) <$> staticScore
   | otherwise = do
     best "LRUDWA" $ \mov -> withBackup $ do
-      res <- simulateStep mov
-      case res of
-        LL.Cont ->
-          snd <$> search (fuel - 1)
-        _ ->
-          return $ scoreResult res
+      simulateStep mov
+      mb <- score
+      case mb of
+        Nothing -> snd <$> search (fuel - 1)
+        Just sc -> return sc
 
 staticScore :: (MonadIO m, Functor m) => LLT m Int
-staticScore = return 0
+staticScore = abortScore
 
 best :: Monad m => [a] -> (a -> LLT m Int) -> LLT m (a, Int)
 best ls m = do

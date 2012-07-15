@@ -192,17 +192,24 @@ simulateStep mv
   | otherwise = do
     stash mv
     wlog <- liftIO $ newIORef []
+    rlog <- liftIO $ newIORef []
     bd <- access llBoardL
 
     let write p v = do
           c <- readPos bd p
-          writePos bd p v
-          when (c /= v) $ liftIO $ modifyIORef wlog $ ((p, c):)
+          liftIO $ modifyIORef rlog $ ((p, c):)
+          liftIO $ modifyIORef wlog $ ((p, v):)
+        commit = liftIO $ do
+          wl <- readIORef wlog
+          forM_ (reverse wl) $ \(p, v) -> writePos bd p v
+          writeIORef wlog []
 
     moveC mv write
+    commit
     update write
+    commit
 
-    diff <- liftIO $ readIORef wlog
+    diff <- liftIO $ readIORef rlog
     void $ llPatchesL %= \(p:ps) -> (p { pBoardDiff = diff }:ps)
 
 type WriteLogger m = Pos -> Char -> LLT m ()
@@ -301,8 +308,8 @@ update wlog = do
   -- rocks must be sorted
   llRockPosL ~= sortBy (comparing $ \(Pos x y) -> (y, x)) newRocks
 
-  cup <- readPos llBoard $ llPos + Pos 0 1
-  when (bup /= '*' && cup == '*') $ do -- Totuzen no DEATH!!
+  when (bup /= '*' && any (== llPos + Pos 0 1) newRocks) $ do
+    -- Totuzen no DEATH!!
     void $ llResultL ~= Dead
 
   let wl = Flood.waterLevel llStep llFlood

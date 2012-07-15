@@ -35,7 +35,7 @@ main = defaultMain greedySolver
 
 data Value =  Happy Int | Afraid Int | Unknown | Danger deriving (Eq, Ord, Show)
 
-data GrandValue = 
+data GrandValue =
   GrandValue
   {expectedScore :: Int,
    gameHasEnded :: Bool,
@@ -47,7 +47,7 @@ grandValue n = GrandValue n True (Happy 0)
 
 instance Ord GrandValue where
 -- the smaller, the better
-  compare (GrandValue ex1 end1 val1) (GrandValue ex2 end2 val2) 
+  compare (GrandValue ex1 end1 val1) (GrandValue ex2 end2 val2)
     | ex1 /= ex2 = compare ex2 ex1
     | end1 /= end2 = compare end1 end2
     | otherwise = compare val1 val2
@@ -70,8 +70,8 @@ valAfraid x = x
 
 greedySolver = safetynet $ do
   _ <- evaluatePlaying debugMode
-  yomi <- sort <$> 
-          mapM (\c -> (\(val,hist)->(val,c,hist)) <$> 
+  yomi <- sort <$>
+          mapM (\c -> (\(val,hist)->(val,c,hist)) <$>
                       evaluateHand yomiDepth c) "LRUDA"
   when debugMode $ printe $ yomi
   let (_, cmd, hist) = head yomi
@@ -81,7 +81,7 @@ greedySolver = safetynet $ do
 
 evaluateHand :: (Functor m, MonadIO m) => Int -> Char -> LLT m (GrandValue, [Pos])
 evaluateHand depth hand
-  | depth <= 0 = do 
+  | depth <= 0 = do
       val <- evaluatePlaying False
       pos <- access llPosL
       return (val, [pos])
@@ -97,12 +97,12 @@ evaluateHand depth hand
           Win n   -> addReturn $ grandValue n
           Abort n -> addReturn $ grandValue n
           Dead n  -> addReturn $ grandValue n
-          Cont    -> 
+          Cont    ->
             head . sort <$> mapM (evaluateHand (depth-1)) "LRUDA"
 
 
 dijkstra guide = do
-  bd <- access llBoardL    
+  bd <- access llBoardL
   probes <- liftIO $ newIORef $ Q.empty
   loopPos $ \ r -> do
     a <- readPos bd r
@@ -128,13 +128,13 @@ dijkstra guide = do
           liftIO $ modifyIORef probes $ Q.insert (valPlus 1 val, nr)
 
 dijkstraRobot guideRobot = do
-  bd <- access llBoardL    
+  bd <- access llBoardL
   probes <- liftIO $ newIORef $ Q.empty
   loopPos $ \ r -> do
     a <- readPos bd r
     case a of
       _ | a == 'R' -> do
-           liftIO $ modifyIORef probes $ Q.insert (Happy 0, r) 
+           liftIO $ modifyIORef probes $ Q.insert (Happy 0, r)
         | a `elem` " .R\\OL"-> return ()
         | otherwise -> writePos guideRobot r Danger
   while (liftIO ((not . Q.null) <$> readIORef probes)) $ do
@@ -154,11 +154,11 @@ dijkstraRobot guideRobot = do
 
 evaluatePlaying :: (Functor m, MonadIO m) => Bool -> LLT m GrandValue
 evaluatePlaying debugFlag = do
-  bd <- access llBoardL  
+  bd <- access llBoardL
   (w,h) <- getSize
   guide <- liftIO $ VM.replicateM h $ VM.replicate w Unknown
   guideRobot <- liftIO $ VM.replicateM h $ VM.replicate w Unknown
-  dijkstra guide 
+  dijkstra guide
   dijkstraRobot guideRobot
 
   when debugFlag $ do
@@ -167,19 +167,19 @@ evaluatePlaying debugFlag = do
       loopPos $ \r -> do
         val <- head <$> readPosList guide r
         writePos bd r (val2char val)
-      showBoard   
+      showBoard
   when debugFlag $ do
     withBackup $ do
       bd <- access llBoardL
       loopPos $ \r -> do
         val <- head <$> readPosList guideRobot r
         writePos bd r (val2char val)
-      showBoard   
+      showBoard
 
-  remaining <- access llLambdasL        
+  remaining <- access llLambdasL
   totaling <- access llTotalLambdasL
-  roboPos <- access llPosL          
-  liftPos <- access llLiftPosL          
+  roboPos <- access llPosL
+  liftPos <- access llLiftPosL
   roboVal <- head <$> readPosList guide roboPos
   liftVal <- head <$> readPosList guideRobot liftPos
 
@@ -198,7 +198,7 @@ evaluatePlaying debugFlag = do
        else liftIO $ modifyIORef noLambdaR   (1+)
   yesLambda <- liftIO $ readIORef yesLambdaR
   noLambda <- liftIO $ readIORef noLambdaR
-  let liftYes :: Bool 
+  let liftYes :: Bool
       liftYes = liftVal < Unknown && noLambda == 0
       abortScoreHope = abortScore0 + 25 * yesLambda
       winScoreHope = winScore0 + 37 * yesLambda + 100
@@ -206,5 +206,3 @@ evaluatePlaying debugFlag = do
     _ | not liftYes          -> return $ GrandValue abortScoreHope False roboVal
       | roboVal   >= Unknown -> return $ GrandValue abortScore0 False roboVal
       | otherwise            -> return $ GrandValue winScoreHope False roboVal
- 
-

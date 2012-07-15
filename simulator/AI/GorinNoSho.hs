@@ -125,7 +125,7 @@ dijkstra field sourceStr passableStr initVal = do
   bd <- access llBoardL
   probes <- liftIO $ newIORef $ Q.empty
   forPos $ \ r -> do
-    a <- normalize <$> readPos bd r
+    a <- liftIO $ normalize <$> readPos bd r
     case a of
       _ | a `elem` sourceStr   -> do
            liftIO $ modifyIORef probes $ Q.insert (initVal, r)

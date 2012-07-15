@@ -27,6 +27,7 @@ data LLState
     , llLiftPos      :: {-# UNPACK #-} !Pos
     , llFlood        :: !Flood
     , llTramp        :: ![(Char, (Char, Pos, [Pos]))]
+    , llGrowth       :: {-# UNPACK #-} !Int
 
       -- current state
     , llResult       :: {-# UNPACK #-} !Result
@@ -36,6 +37,7 @@ data LLState
 
     , llRockPos      :: ![Pos]
     , llWaterStep    :: {-# UNPACK #-} !Int
+    , llRazors       :: {-# UNPACK #-} !Int
 
       -- mutable, need for clone for backup
     , llBoard        :: !Board
@@ -51,6 +53,7 @@ data LLPatch
     , pPrevLambdas :: {-# UNPACK #-} !Int
     , pPrevRocks   :: ![Pos]
     , pPrevWater   :: {-# UNPACK #-} !Int
+    , pPrevRazors  :: {-# UNPACK #-} !Int
     , pBoardDiff   :: ![(Pos, Char)]
     }
 

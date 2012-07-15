@@ -31,6 +31,12 @@ function build_run() {
     cd $MATCHDIR
 }
 
+function run() {
+    maptype="$1"
+    mapdir="$PROJECT_ROOT/$maptype"
+    find mapdir -name "*.map" -exec ln -s {} \;
+}
+
 while true; do
     build_run
     sleep 60

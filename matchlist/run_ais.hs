@@ -81,19 +81,12 @@ updateAI aipath mappath dest basename wait = do
     resultFile = basename ++ ".result"
     rfpath = FP.decodeString resultFile
 
-getScore :: String -> IO (String, Int)
-getScore resfile = do
-  lst <- BL8.lines <$> BL8.readFile resfile
+getAnswer :: String -> IO String
+getAnswer ansfile = do
+  lst <- lines <$> IO.readFile ansfile
   if null lst
-    then return ("Unknown", 0)
-    else return $ parse $ last lst
-  where
-    parse l | BL8.isPrefixOf "Abort " l = ("Abort", getScoreVal l)
-            | BL8.isPrefixOf "Dead " l = ("Dead", getScoreVal l)
-            | BL8.isPrefixOf "Win " l = ("Win", getScoreVal l)
-            | otherwise = ("Unknown", 0)
-    getScoreVal s = read . BL8.unpack . BL8.takeWhile isScoreChar . BL8.dropWhile (not . isScoreChar) $ s
-    isScoreChar c = isDigit c || c == '-'
+    then return ""
+    else return $ last lst
 
 runAI :: FilePath
       -> FilePath
@@ -104,6 +97,10 @@ runAI :: FilePath
 runAI aipath mappath dest basename wait = do
   let errfn = basename ++ ".err.txt"
       outfn = basename ++ ".out.txt"
+      ainame = 
+      aispec = AISpec aname aipath
+      mapspec = MapSpec mname mappath
+
   IO.withFile outfn IO.WriteMode $ \hout ->
     IO.withFile errfn IO.WriteMode $ \herr -> do
       start <- getCurrentTime
@@ -128,16 +125,22 @@ runAI aipath mappath dest basename wait = do
       let es = fromRational . toRational $ elapsed
       killThread wth
 
-      (rtype, score) <- getScore outfn
+      ans <- getAnswer outfn
+      score <- calcScore mapdata ans
 
-      return $ Result { resultExitCode = fromExitCode <$> ret
-                      , resultAIPath = aipath
-                      , resultAIName = FilePath.takeFileName aipath
-                      , resultBaseName = basename
-                      , resultType = rtype
-                      , resultScore = score
-                      , resultMapPath = mappath
-                      , resultTimeElapsed = es
+      return $ SolvedResult { sExitCode = fromExitCode <$> ret
+                            , sMapSpec = mapspec
+                            , sAISpec = aispec
+                            , sScore = score
+                            , sTimeElapsed = es
+                            }
+                      --       , resuAIPath = aipath
+                      -- , resultAIName = FilePath.takeFileName aipath
+                      -- , resultBaseName = basename
+                      -- , resultType = rtype
+                      -- , resultScore = score
+                      -- , resultMapPath = mappath
+                      -- , resultTimeElapsed = es
                       }
 
   where

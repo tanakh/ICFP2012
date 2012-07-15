@@ -76,4 +76,4 @@ defaultMain oracle theSolver = do
 
   -- honban you shutsuryoku
   infiniteLoop <- Oracle.ask oracle "infiniteLoop" $ return False
-  when (infiniteLoop) $ putStrLn replay
+  when (not infiniteLoop) $ putStrLn replay

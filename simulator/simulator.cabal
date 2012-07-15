@@ -98,7 +98,7 @@ executable ll-ai-babayaga
   main-is:             ../AI/BabaYaga.hs
   build-depends:       base ==4.5.*, simulator
                      , vector, data-lens-fd, mtl, control-monad-loop, stm
-  buildable:           True
+  buildable:           False
 
 --cabal configure --enable-library-profiling --enable-executable-profiling
 -- ./dist/build/ll-ai-tuja/ll-ai-tuja -i ../data/contest10.map -s -v +RTS -Pa

@@ -2,6 +2,7 @@
 
 module State where
 
+import Data.Word
 import Data.Lens.Template
 import qualified Data.Vector.Mutable as VM
 import qualified Data.Vector.Unboxed.Mutable as UM
@@ -41,6 +42,7 @@ data LLState
 
       -- mutable, need for clone for backup
     , llBoard        :: !Board
+    , llHash         :: {-# UNPACK #-} !Word64
 
       -- history
     , llPatches      :: ![LLPatch]
@@ -56,6 +58,7 @@ data LLPatch
     , pPrevWater   :: {-# UNPACK #-} !Int
     , pPrevRazors  :: {-# UNPACK #-} !Int
     , pBoardDiff   :: ![(Pos, Char)]
+    , pHash        :: {-# UNPACK #-} !Word64
     }
 
 nameMakeLens ''LLState $ \name -> Just (name ++ "L")

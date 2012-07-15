@@ -39,6 +39,7 @@ import Control.Monad
 import Control.Monad.Error
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Loop
+import Data.Bits
 import Data.IORef
 import Data.Lens
 import Data.List
@@ -50,6 +51,7 @@ import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Unboxed.Mutable as UM
 import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Generic.Mutable as GM
+import Data.Word
 import System.IO
 import Text.Printf
 
@@ -62,7 +64,8 @@ newtype LLT m a
   = LLT { unLLT :: StateT LLState m a }
   deriving ( Functor, Applicative
            , Monad, MonadIO
-           , MonadState LLState, MonadTrans)
+           , MonadState LLState, MonadTrans
+           )
 
 type Solver m = LLT m Ans.Ans
 
@@ -97,6 +100,16 @@ deadScore = do
   return (lms * 25 - step)
 
 -----
+
+pr1, pr2, pr3 :: Word64
+pr1 = 268435456 + 3
+pr2 = 536870912 + 11
+pr3 = 1073741824 + 85
+
+hashChar :: Pos -> Char -> Word64
+hashChar (Pos x y) c = do
+  (fromIntegral x * pr1 + fromIntegral y) * pr2 +
+    fromIntegral (fromEnum c) * pr3
 
 runLLT :: MonadIO m => String -> LLT m a -> m a
 runLLT txt m = do
@@ -136,6 +149,10 @@ runLLT txt m = do
       rocks     = map snd $ finds isRock
 
   bd <- liftIO $ V.thaw . V.fromList =<< mapM (U.thaw . U.fromList) bdl
+  let hash = foldl' xor 0
+        [ hashChar (Pos x y) cell
+        | (y, row)  <- zip [0..] bdl, (x, cell) <- zip [0..] row
+        ]
 
   let initState = LLState
         { llTotalLambdas = lambdaNum
@@ -154,6 +171,7 @@ runLLT txt m = do
         , llRazors = razors
 
         , llBoard = bd
+        , llHash = hash
 
         , llPatches = []
         }
@@ -262,7 +280,8 @@ simulateStep mv = do
     update write commit
 
     diff <- liftIO $ readIORef rlog
-    void $ llPatchesL %= \(p:ps) -> (p { pBoardDiff = diff }:ps)
+    let hash = foldl' xor 0 $ map (\(p, c) -> hashChar p c) diff
+    void $ llPatchesL %= \(p:ps) -> (p { pBoardDiff = diff, pHash = hash }:ps)
 
   llStepL += 1
   return ()
@@ -457,6 +476,7 @@ stash mv = do
         , pPrevWater   = llWaterStep
         , pPrevRazors  = llRazors
         , pBoardDiff   = []
+        , pHash        = 0
         }
   void $ llPatchesL %= (revPatch:)
 
@@ -492,6 +512,8 @@ unapply st LLPatch {..} = do
     , llRazors    = pPrevRazors
 
     , llBoard = llBoard st
+    , llHash  = llHash st `xor` pHash
+
     , llPatches = tail $ llPatches st
     }
 

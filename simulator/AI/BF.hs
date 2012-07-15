@@ -15,14 +15,14 @@ import AI.Common
 import DefaultMain
 import LL
 
+minf :: Int
+minf = -10^(9::Int)
+
 main :: IO ()
 main = defaultMain $ do
   (mov, sc) <- withBackup $ search 10
   liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++ [mov]
   return $ Ans.Cont mov
-
-minf :: Int
-minf = -10^(9::Int)
 
 best :: (Functor m, MonadIO m)
         => [Char] -> (Char -> LLT m Int) -> LLT m (Char, Int)

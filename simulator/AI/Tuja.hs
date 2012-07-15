@@ -174,16 +174,24 @@ ninjaMain :: Option.Option -> Int -> Flood.Flood -> [String] -> IO ()
 ninjaMain opt startTime fld bd = do
   submitQ <- newTQueueIO 
   bestTejun <- newTVarIO $ Tejun 0 Abort "A"
-  replicateM_ 100 $ do
+  population <- newTVarIO $ 0
+  forkIO $ launcher population submitQ fld bd
+  forkIO $ collector submitQ bestTejun
+  waitOhagi opt startTime bestTejun
+
+launcher population submitQ fld bd = forever $ do
+  pop <- atomically $ readTVar population
+  when (pop < 30) $ do
     res0 <- initResource
     let res = res0 { submitter = \x -> atomically $ writeTQueue submitQ x}
     config <- randomConfig
     forkIO $ do
+      atomically $ modifyTVar population (1+)
       runLLT fld bd $ simpleSolver res config
-      return ()
-  forkIO $ collector submitQ bestTejun
-  waitOhagi opt startTime bestTejun
-
+      atomically $ modifyTVar population (1-)
+    return ()
+  when (pop > 10) $ usleep 1000
+  
 collector submitQ bestTejun = forever $do
   tejun <- atomically $ readTQueue submitQ
   hPutStrLn stderr $ "receive " ++ show tejun

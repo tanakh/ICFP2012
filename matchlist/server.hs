@@ -10,6 +10,7 @@ import Network.Wai.Middleware.Static
 import qualified Data.Aeson as A
 import Data.Text.Lazy (Text)
 import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.IO as TL
 import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.ByteString.Lazy as BL
 import Data.Data
@@ -20,21 +21,21 @@ import Control.Applicative ((<$>))
 import Control.Monad.Trans
 import Control.Monad
 import System.Directory (getDirectoryContents)
-import System.FilePath (takeFileName, (</>))
+import qualified System.IO as IO
+import System.FilePath ((</>))
 
 import AIResult
 
 data Results =
   Results
-  { rAINames :: [FilePath]
+  { rAIs :: [AISpec]
   , rMapResults :: [EachMap]
   } deriving (Data, Typeable, Show)
 
 data EachMap =
   EachMap
-  { mapName :: String
-  , mapPath :: FilePath
-  , mapResults :: Text
+  { eMapSpec :: MapSpec
+  , eMapResults :: Text
   } deriving (Data, Typeable, Show)
 
 mustache :: (Data a, Typeable a) => FilePath -> a -> IO Text
@@ -44,42 +45,49 @@ mustache path context = do
 resultDir :: FilePath
 resultDir = "results"
 
-getResultList :: IO [Result]
-getResultList = do
+getSolvedResultList :: IO [SolvedResult]
+getSolvedResultList = do
   files <- getDirectoryContents resultDir
   let list = (map (resultDir </>) . filter (isSuffixOf ".result")) $ files
   dat <- forM list $ \f -> A.decode <$> BL.readFile f
   return $ catMaybes dat
 
-getResults :: [Result] -> IO Results
+getResults :: [SolvedResult] -> IO Results
 getResults results = do
   tbl <- mapM eachMap maps
-  return $ Results { rAINames = ainames, rMapResults = tbl }
+  return $ Results { rAIs = ais, rMapResults = tbl }
   where
     catresults = M.fromList
-                 $ map (\r -> ((resultAIPath r, resultMapPath r), r))
+                 $ map (\r -> ((sMapSpec r, sAISpec r), r))
                  $ results
     uniqueBy f lst = M.keys $ M.fromList $ map ((,True) . f) lst
-    maps = uniqueBy resultMapPath results
-    ais = uniqueBy resultAIPath results
-    ainames = map takeFileName ais
-    eachMap mpath = do
-      let mname = takeFileName mpath
-          lst = flip map ais $ \apath -> M.lookup (apath, mpath) catresults
+    maps = uniqueBy sMapSpec results
+    ais = uniqueBy sAISpec results
+    eachMap mSpec = do
+      let lst = flip map ais $ \aSpec -> M.lookup (mSpec, aSpec) catresults
       tbl <- renderTable lst
-      return $ EachMap mname mpath (TL.concat tbl)
+      return $ EachMap mSpec (TL.concat tbl)
 
-renderTable :: [Maybe Result] -> IO [Text]
+renderTable :: [Maybe SolvedResult] -> IO [Text]
 renderTable results = forM results $ \r -> do
   case r of
-    Just v -> mustache "views/td.mustache" v
+    Just v -> mustache "./views/td.mustache" v
     Nothing -> return "<td>N/A</td>"
 
 main :: IO ()
-main = scotty 3000 $ do
+main = do
+  renderResult >>= TL.putStrLn
+  -- serv
+
+renderResult :: IO Text
+renderResult = do
+  results <- getSolvedResultList >>= getResults
+  mustache "./views/home.mustache" results
+
+-- does not works. i dont know why
+serv :: IO ()
+serv = scotty 3000 $ do
     middleware $ staticPolicy $ addBase "results"
 
     get "/" $ do
-      results <- liftIO $ getResultList >>= getResults
-      body <- liftIO $ mustache "views/home.mustache" results
-      html body
+      liftIO renderResult >>= html

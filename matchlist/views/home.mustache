@@ -27,14 +27,12 @@
     <table id="matchResults">
       <tr>
         <th></th>
-        {{#rAINames}}
-        <th>{{}}</th>
-        {{/rAINames}}
+        {{#rAIs}}<th>{{aiName}}</th>{{/rAIs}}
       </tr>
       {{#rMapResults}}
       <tr>
-        <th><a class="map" href="{{mapPath}}">{{mapName}}</th>
-        {{& mapResults}}
+        <th>{{#eMapSpec}}<a class="map" href="{{mapPath}}">{{mapName}}{{/eMapSpec}}</th>
+        {{& eMapResults}}
       </tr>
       {{/rMapResults}}
     </table>

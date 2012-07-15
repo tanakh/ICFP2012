@@ -1,8 +1,29 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses, UndecidableInstances #-}
-{-# LANGUAGE TemplateHaskell #-}
 
-module LL where
+module LL (
+  LLT, runLLT,
+  Solver,
+
+  simulate,
+  simulateStep, undo,
+  move, moveC,
+
+  getSize,
+
+  forPos, loopPos,
+
+  whenInBoundPos,
+  readCell, readCellM, readPos, readPosM,
+  writeCell, writePos,
+
+  backupState, withBackup,
+  showStatus, showBoard,
+
+  scoreResult, abortScore, deathScore, winScore,
+
+  module State,
+  ) where
 
 import Control.Applicative
 import Control.Exception
@@ -14,41 +35,24 @@ import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Digest.Pure.MD5
 import Data.IORef
 import Data.Lens
-import Data.Lens.Template
+import Data.Maybe
 import Data.Ord
 import qualified Data.Vector as V
 import qualified Data.Vector.Algorithms.Intro as Intro
 import qualified Data.Vector.Mutable as VM
-import qualified Data.Vector.Storable as U
-import qualified Data.Vector.Storable.Mutable as UM
+import qualified Data.Vector.Unboxed as U
+import qualified Data.Vector.Unboxed.Mutable as UM
 import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Generic.Mutable as GM
 import System.FilePath
 import System.IO
 import Text.Printf
 
-import qualified Ans as Ans
-import qualified Option as Opt
+import qualified Ans
+import qualified Option
 import qualified Flood
 import Pos
-
-type Board = VM.IOVector (UM.IOVector Char)
-
-data LLState
-  = LLState
-    { llStep         :: Int
-    , llLambdas      :: Int
-    , llTotalLambdas :: Int
-    , llFlood        :: Flood.Flood
-    , llPos          :: Pos
-    , llLiftPos      :: Pos
-    , llRockPos      :: VM.IOVector Pos
-    , llBoard        :: Board
-    , llWaterStep    :: Int
-    , llHist         :: [LLState]
-    , llReplay       :: [Char]
-    }
-nameMakeLens ''LLState $ \name -> Just (name ++ "L")
+import State
 
 newtype LLT m a
   = LLT { unLLT :: StateT LLState m a }
@@ -188,13 +192,13 @@ showBoard = do
 
 type Solver m = LLT m Ans.Ans
 
-simulate :: Opt.Option -> Flood.Flood ->  [String] -> Solver IO -> IO Result
+simulate :: Option.Option -> Flood.Flood ->  [String] -> Solver IO -> IO Result
 simulate opt fld bd solver = do
   runLLT fld bd $ do
     res <- once $ do
       repeatLoopT $ do
         -- pass the current status to the provider (and to player)
-        when (Opt.verbose opt) $ ll showStatus
+        when (Option.verbose opt) $ ll showStatus
         -- receive answer
         ans <- ll $ solver
         res <- case ans of
@@ -206,7 +210,7 @@ simulate opt fld bd solver = do
           _ -> lift $ exitWith res
       exitWith Cont
 
-    when (Opt.verbose opt) $ do
+    when (Option.verbose opt) $ do
       case res of
         Win   sc -> liftIO $ printf "You Win: %d\n" sc
         Abort sc -> liftIO $ printf "Aborted: %d\n" sc
@@ -215,16 +219,16 @@ simulate opt fld bd solver = do
       showStatus
 
     rep <- reverse <$> access llReplayL
-    when (Opt.verbose opt) $ do
+    when (Option.verbose opt) $ do
       liftIO $ putStrLn rep
 
-    case Opt.replay opt of
-      Opt.ReplayNothing -> do
+    case Option.replay opt of
+      Option.ReplayNothing -> do
         return ()
-      Opt.ReplayDefault -> do
-        let fn = case Opt.input opt of
-              Opt.InputFile fp -> fp
-              Opt.Stdin -> "STDIN"
+      Option.ReplayDefault -> do
+        let fn = case Option.input opt of
+              Option.InputFile fp -> fp
+              Option.Stdin -> "STDIN"
         liftIO $ writeFile
           (printf "replay-%s-%d-%s.txt"
            (dropExtension $ takeFileName fn)
@@ -232,19 +236,10 @@ simulate opt fld bd solver = do
            (take 6 $ show $ md5 $ L.pack rep))
           rep
 
-    when (Opt.input opt == Opt.Stdin) $ do
+    when (Option.input opt == Option.Stdin) $ do
       liftIO $ putStrLn rep
       liftIO $ hFlush stdout
     return res
-
-undo :: MonadIO m => LLT m ()
-undo = do
-  hist <- access llHistL
-  case hist of
-    [] -> do
-      liftIO $ putStrLn "cannot undo"
-    (top:_) -> do
-      put top
 
 simulateStep :: (Functor m, MonadIO m) => Char -> LLT m Result
 simulateStep mv = do
@@ -342,6 +337,15 @@ simulateStep' cont = do
 
     return Cont
 
+undo :: MonadIO m => LLT m ()
+undo = do
+  hist <- access llHistL
+  case hist of
+    [] -> do
+      liftIO $ putStrLn "cannot undo"
+    (top:_) -> do
+      put top
+
 move :: (MonadIO m, Functor m) => Int -> Int -> LLT m Result
 move dx dy = do
   p0 <- access llPosL
@@ -410,38 +414,44 @@ loopPos m = do
   foreach [ Pos x y | y <- [0..h-1], x <- [0..w-1] ] $ \pos -> do
     m pos
 
+whenInBound :: (U.Unbox x, MonadIO m)
+               => Field x -> Int -> Int -> a -> IO a -> m a
 whenInBound bd x y def action = liftIO $ do
   let h = GM.length bd
   w <- GM.length <$> GM.read bd 0
   if x >= 0 && x < w && y >= 0 && y < h
     then action
-    else def
+    else return def
 
-whenPosInBound bd (Pos x y) = whenInBound bd x y
+whenInBoundPos :: (U.Unbox x, MonadIO m)
+                  => Field x -> Pos -> a -> IO a -> m a
+whenInBoundPos bd (Pos x y) def action = liftIO $ do
+  let h = GM.length bd
+  w <- GM.length <$> GM.read bd 0
+  if x >= 0 && x < w && y >= 0 && y < h
+    then action
+    else return def
 
-readCell :: MonadIO m => Board -> Int -> Int -> m Char
-readCell bd x y = whenInBound bd x y (return '#') $ do
+readCell :: (Functor m, MonadIO m) => Board -> Int -> Int -> m Char
+readCell bd x y = fromMaybe '#' <$> readCellM bd x y
+
+readCellM :: (MonadPlus f, MonadIO m) => Board -> Int -> Int -> m (f Char)
+readCellM bd x y = whenInBound bd x y mzero $ do
   row <- GM.read bd y
-  GM.read row x
+  return <$> GM.read row x
 
-readCellMaybe bd x y = whenInBound bd x y (return Nothing) $ do
-  row <- GM.read bd y
-  Just <$> GM.read row x
+readPos :: (Functor m, MonadIO m) => Board -> Pos -> m Char
+readPos bd (Pos x y) = readCell bd x y
 
-readCellList bd x y = whenInBound bd x y (return []) $ do
-  row <- GM.read bd y
-  (:[]) <$> GM.read row x
+readPosM :: (MonadPlus f, MonadIO m) => Board -> Pos -> m (f Char)
+readPosM bd (Pos x y) = readCellM bd x y
 
-writeCell bd x y v = whenInBound bd x y (return ()) $ do
+writeCell :: MonadIO m => Board -> Int -> Int -> Char -> m ()
+writeCell bd x y v = whenInBound bd x y () $ do
   row <- GM.read bd y
   GM.write row x v
 
-readPos bd (Pos x y) = readCell bd x y
-
+writePos :: MonadIO m => Board -> Pos -> Char -> m ()
 writePos bd (Pos x y) v = writeCell bd x y v
-
-readPosMaybe bd (Pos x y) = readCellMaybe bd x y
-
-readPosList bd (Pos x y) = readCellList bd x y
 
 ll = lift . lift

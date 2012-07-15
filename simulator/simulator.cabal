@@ -25,6 +25,7 @@ library
                        Option
                        Pos
                        Provider
+                       State
   build-depends:       base ==4.5.*
                      , vector
                      , vector-algorithms

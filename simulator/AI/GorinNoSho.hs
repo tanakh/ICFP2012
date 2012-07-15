@@ -9,7 +9,8 @@ import Control.Monad.Trans
 import Data.Lens
 import qualified Data.PQueue.Min as Q
 import Data.IORef
-import qualified Data.Vector.Mutable as VM
+import qualified Data.Vector.Generic.Mutable as GM
+import qualified Data.Vector.Unboxed as U
 import System.IO
 
 import           AI.Common
@@ -19,60 +20,59 @@ import           Pos
 printe :: (MonadIO m, Show a) => a -> m ()
 printe = liftIO . hPutStrLn stderr . show
 
-type Field a = VM.IOVector (VM.IOVector a) 
-
-newF :: (MonadIO m) => a -> LLT m (Field a)
+newF :: (U.Unbox a, MonadIO m) => a -> LLT m (Field a)
 newF initVal = do
   (w,h) <- getSize
-  liftIO $ VM.replicateM h $ VM.replicate w initVal
-  
-unsafeReadFIO :: Field a -> Pos -> IO a
+  liftIO $ GM.replicateM h $ GM.replicate w initVal
+
+unsafeReadFIO :: U.Unbox a => Field a -> Pos -> IO a
 unsafeReadFIO field (Pos x y) = do
-  line <- VM.unsafeRead field y
-  VM.unsafeRead line x
+  line <- GM.unsafeRead field y
+  GM.unsafeRead line x
 
-unsafeWriteFIO :: Field a -> Pos -> a -> IO ()
+unsafeWriteFIO :: U.Unbox a => Field a -> Pos -> a -> IO ()
 unsafeWriteFIO field (Pos x y) val = do
-  line <- VM.unsafeRead field y
-  VM.unsafeWrite line x val
+  line <- GM.unsafeRead field y
+  GM.unsafeWrite line x val
 
-unsafeReadF :: (MonadIO m)=>Field a -> Pos -> m a
+unsafeReadF :: (U.Unbox a, MonadIO m)=>Field a -> Pos -> m a
 unsafeReadF bd r = liftIO $ unsafeReadFIO bd r
 
-unsafeWriteF :: (MonadIO m)=>Field a -> Pos -> a -> m ()
+unsafeWriteF :: (U.Unbox a, MonadIO m)=>Field a -> Pos -> a -> m ()
 unsafeWriteF bd r val = liftIO $ unsafeWriteFIO bd r val
 
-readFList :: (Functor m, MonadIO m) => Field a -> Pos -> m [a]
-readFList bd r = whenPosInBound bd r (return []) ((:[]) <$> unsafeReadF bd r)
+readFList :: (MonadIO m, U.Unbox a) => Field a -> Pos -> m [a]
+readFList bd r = whenInBoundPos bd r [] ((:[]) <$> unsafeReadF bd r)
 
-writeF :: (MonadIO m) => Field a -> Pos -> a -> m ()
-writeF bd r val = whenPosInBound bd r (return ()) (unsafeWriteF bd r val)
+writeF :: (MonadIO m, U.Unbox a) => Field a -> Pos -> a -> m ()
+writeF bd r val = whenInBoundPos bd r () (unsafeWriteF bd r val)
 
-convertF :: (MonadIO m ) => Field a -> (a->b) -> LLT m (Field b)
+convertF :: (U.Unbox a, U.Unbox b, MonadIO m)
+            => Field a -> (a->b) -> LLT m (Field b)
 convertF source f = do
   (w,h) <- getSize
   liftIO $ do
-    ret <- VM.new h 
+    ret <- GM.new h
     forM_ [0..h-1] $ \ y -> do
-      srcLine <- VM.unsafeRead source y
-      line <- VM.new w
+      srcLine <- GM.unsafeRead source y
+      line <- GM.new w
       forM_ [0..w-1] $ \ x -> do
-        a <- VM.unsafeRead srcLine x
-        VM.unsafeWrite line x (f a)
-      VM.unsafeWrite ret y line
+        a <- GM.unsafeRead srcLine x
+        GM.unsafeWrite line x (f a)
+      GM.unsafeWrite ret y line
     return ret
 
-updateF :: (MonadIO m ) => Field a -> (a->a) -> LLT m ()
+updateF :: (U.Unbox a, MonadIO m) => Field a -> (a->a) -> LLT m ()
 updateF source f= do
   (w,h) <- getSize
   liftIO $ do
     forM_ [0..h-1] $ \ y -> do
-      srcLine <- VM.unsafeRead source y
+      srcLine <- GM.unsafeRead source y
       forM_ [0..w-1] $ \ x -> do
-        a <- VM.unsafeRead srcLine x
-        VM.unsafeWrite srcLine x (f a)
+        a <- GM.unsafeRead srcLine x
+        GM.unsafeWrite srcLine x (f a)
 
-showF :: (MonadIO m ) => (a->String) -> Field a -> LLT m ()
+showF :: (U.Unbox a, MonadIO m) => (a->String) -> Field a -> LLT m ()
 showF convert bd = do
   (w,h) <- getSize
   liftIO $ do
@@ -85,7 +85,7 @@ showF convert bd = do
     forM_ [h-1, h-2 .. 0] $ \y -> do
       forM_ [0..w-1] $ \x -> do
         a <- unsafeReadFIO bd (Pos x y)
-        let str = convert a 
+        let str = convert a
             len = length str
             str2 = (replicate (maxLen-len) ' ') ++ str
         hPutStr stderr str2
@@ -96,7 +96,7 @@ class (Eq a, Ord a, Num a) => Terrain a where
   unknown :: a
   blocked :: a
   isPassable :: a-> Bool
-  isPassable x 
+  isPassable x
     | x == unknown = False
     | x == blocked = False
     | otherwise    = True
@@ -110,7 +110,7 @@ instance Terrain Double where
   unknown = 8901e35
   blocked = 1341e72
 wideShow :: (Terrain a,Show a) =>Int -> a -> String
-wideShow width val 
+wideShow width val
   | val == unknown = "?? "
   | val == blocked = ">< "
   | otherwise      = take (width-1) (show2 val) ++ " "
@@ -118,17 +118,17 @@ wideShow width val
     show2 = cut . show
     cut ('0':'.':xs) = '.':xs
     cut x = x
-    
-dijkstra :: (MonadIO m, Terrain a) => 
+
+dijkstra :: (MonadIO m, Functor m, Terrain a, U.Unbox a) =>
             Field a -> String -> String -> a -> LLT m (Field a)
 dijkstra field sourceStr passableStr initVal = do
-  bd <- access llBoardL  
+  bd <- access llBoardL
   probes <- liftIO $ newIORef $ Q.empty
   forPos $ \ r -> do
     a <- readPos bd r
     case a of
       _ | a `elem` sourceStr   -> do
-           liftIO $ modifyIORef probes $ Q.insert (initVal, r) 
+           liftIO $ modifyIORef probes $ Q.insert (initVal, r)
            writeF field r unknown
         | a `elem` passableStr -> writeF field r unknown
         | otherwise            -> writeF field r blocked
@@ -144,6 +144,3 @@ dijkstra field sourceStr passableStr initVal = do
         forM_ newVals $ \ _ -> do
           liftIO $ modifyIORef probes $ Q.insert (terrainSucc val, nr)
   return field
-
-
-

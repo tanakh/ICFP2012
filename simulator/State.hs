@@ -24,8 +24,9 @@ data LLState
   = LLState
     { -- constants
       llTotalLambdas :: {-# UNPACK #-} !Int
-    , llFlood        :: {-# UNPACK #-} !Flood
     , llLiftPos      :: {-# UNPACK #-} !Pos
+    , llFlood        :: !Flood
+    , llTramp        :: ![(Char, (Char, Pos, [Pos]))]
 
       -- current state
     , llResult       :: {-# UNPACK #-} !Result

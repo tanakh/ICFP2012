@@ -6,8 +6,8 @@ module Flood
 
 data Flood
   = Flood
-    { water :: {-# UNPACK #-} !Int
-    , flooding :: {-# UNPACK #-} !Int
+    { water      :: {-# UNPACK #-} !Int
+    , flooding   :: {-# UNPACK #-} !Int
     , waterproof :: {-# UNPACK #-} !Int
     }
 
@@ -21,12 +21,10 @@ waterLevel step fld =   -- step is now 0-origin
      else water fld + step `div` flooding fld
 
 readFlood :: [String] -> Flood
-readFlood = foldr upd defaultFlood . map r where
-  r s = let [name,sval] = words s
-            val = read sval :: Int
-        in (name, val)
+readFlood = foldr upd defaultFlood . map words
 
-upd :: (String, Int) -> Flood -> Flood
-upd ("Water", n) x = x { water = n }
-upd ("Flooding", n) x = x { flooding = n }
-upd ("Waterproof", n) x = x { waterproof = n }
+upd :: [String] -> Flood -> Flood
+upd ["Water",      n] x = x { water = read n }
+upd ["Flooding",   n] x = x { flooding = read n }
+upd ["Waterproof", n] x = x { waterproof = read n }
+upd _ x = x

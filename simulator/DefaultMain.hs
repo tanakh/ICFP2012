@@ -20,11 +20,6 @@ defaultMain theSolver = do
   txt <- case Option.input opt of
     Option.Stdin -> getContents
     Option.InputFile fn -> readFile fn
-  let (txtB,txtM) = span (/="") $ lines txt
-      bd0 = reverse txtB
-      w = maximum $ map length bd0
-      bd = map (take w . (++ repeat ' ')) bd0
-      fld = Flood.readFlood $ drop 1 txtM
   ansMVar <- newEmptyMVar
   stateMVar <- newEmptyMVar
 
@@ -42,7 +37,7 @@ defaultMain theSolver = do
       return $ theSolver
 
   (res, score, replay) <-
-    simulate (Option.verbose opt) fld bd solver
+    simulate (Option.verbose opt) txt solver
 
   when (Option.verbose opt) $ do
     printf "%s %d: %s\n" (show res) score replay

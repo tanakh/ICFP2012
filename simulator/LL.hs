@@ -94,24 +94,43 @@ deadScore = do
 
 -----
 
-runLLT :: MonadIO m => Flood.Flood -> [String] -> LLT m a -> m a
-runLLT fld bdl m = do
-  let finds c =
-        [ Pos (x :: Int) (y ::Int)
-        | (y, row)  <- zip [0..] bdl, (x, cell) <- zip [0..] row, cell == c
+runLLT :: MonadIO m => String -> LLT m a -> m a
+runLLT txt m = do
+  let (txtB,txtM) = span (/="") $ lines txt
+      bd0 = reverse txtB
+      w = maximum $ map length bd0
+      bdl = map (take w . (++ repeat ' ')) bd0
+
+  let finds p =
+        [ (cell, Pos (x :: Int) (y ::Int))
+        | (y, row)  <- zip [0..] bdl, (x, cell) <- zip [0..] row, p cell
         ]
 
-  let rpos      = head $ finds 'R'
-      lpos      = head $ finds 'L'
-      lambdaNum = length $ finds '\\'
-      rocks     = finds '*'
+  let fld = Flood.readFlood $ drop 1 txtM
+
+  let tramps  = finds (`elem` ['A' .. 'I'])
+      targets = finds (`elem` ['1' .. '9'])
+      trampp =
+        [ (f, t) | ["Trampoline", [f], "targets", [t]] <- map words txtM ]
+      tramp =
+        [ (f, (t, tp, map (\e -> fromJust $ lookup e tramps) erases))
+        | (f, t) <- trampp
+        , let Just tp = lookup t targets
+              erases = map fst $ filter ((==t).snd) trampp
+        ]
+
+  let rpos      = snd . head $ finds (=='R')
+      lpos      = snd . head $ finds (=='L')
+      lambdaNum = length $ finds (=='\\')
+      rocks     = map snd $ finds (=='*')
 
   bd <- liftIO $ V.thaw . V.fromList =<< mapM (U.thaw . U.fromList) bdl
 
   let initState = LLState
         { llTotalLambdas = lambdaNum
-        , llFlood = fld
         , llLiftPos = lpos
+        , llFlood = fld
+        , llTramp = tramp
 
         , llResult = Cont
         , llStep = 0
@@ -133,12 +152,19 @@ showStatus = do
   score1 <- winScore
   score2 <- abortScore
   score3 <- deadScore
-  liftIO $ printf "step: %d, lambdas: %03d/%03d, score: %d/%d/%d\n"
-    llStep llLambdas llTotalLambdas
-    score1 score2 score3
 
-  liftIO $ printf "water: %02d/%02d\n"
-    llWaterStep (Flood.waterproof llFlood)
+  liftIO $ do
+    printf "step: %d, lambdas: %03d/%03d, score: %d/%d/%d\n"
+      llStep llLambdas llTotalLambdas
+      score1 score2 score3
+
+    printf "water: %02d/%02d\n"
+      llWaterStep (Flood.waterproof llFlood)
+
+    when (not $ null llTramp) $ do
+      putStrLn $ "trampoline: " ++
+        ( intercalate ", "
+          $ map (\(f, (t, _, _)) -> [f] ++ "->" ++ [t]) llTramp )
 
   showBoard
 
@@ -155,9 +181,9 @@ showBoard = do
 getReplay :: (Functor m, MonadIO m) => LLT m String
 getReplay = reverse . map pMove <$> access llPatchesL
 
-simulate :: Bool -> Flood.Flood -> [String] -> Solver IO
+simulate :: Bool -> String -> Solver IO
             -> IO (Result, Int, String) -- (result, score, replay)
-simulate interactive fld bd solver = runLLT fld bd go where
+simulate interactive txt solver = runLLT txt go where
   go = do
     -- pass the current status to the provider (and to player)
     when interactive $ showStatus
@@ -242,14 +268,25 @@ move d@(Pos _ dy) wlog = do
         wlog p1 'R'
         when (c1 == '\\') $ void $ llLambdasL += 1
         when (c1 == 'O')  $ void $ llResultL ~= Win
-        void $ llPosL ~= p1
+        llPosL ~= p1
+        return ()
       | dy == 0 && c1 == '*' && c2 == ' ' -> do
         -- push rock
         wlog p0 ' '
         wlog p1 'R'
         wlog p2 '*'
         llPosL ~= p1
-        void $ llRockPosL %= map (\p -> if p == p1 then p2 else p)
+        llRockPosL %= map (\p -> if p == p1 then p2 else p)
+        return ()
+      | c1 `elem` ['A' .. 'I'] -> do
+        -- move to trampoline
+        let Just (_, to, erases) = lookup c1 llTramp
+        wlog p0 ' '
+        wlog p1 ' '
+        wlog to 'R'
+        forM_ erases $ \tp -> wlog tp ' '
+        llPosL ~= to
+        return ()
       | otherwise -> do
         return ()
 
@@ -352,8 +389,9 @@ unapply st LLPatch {..} = do
   forM_ pBoardDiff $ \(pos, cell) -> writePos (llBoard st) pos cell
   return $ LLState
     { llTotalLambdas = llTotalLambdas st
-    , llFlood = llFlood st
     , llLiftPos = llLiftPos st
+    , llFlood = llFlood st
+    , llTramp = llTramp st
 
     , llResult = llResult st
     , llStep = llStep st - 1
@@ -414,16 +452,20 @@ whenInBoundPos bd (Pos x y) def action = liftIO $ do
   if x >= 0 && x < w && y >= 0 && y < h
     then action
     else return def
+{-# INLINEABLE whenInBoundPos #-}
 
 readPos :: (Functor m, MonadIO m) => Board -> Pos -> m Char
 readPos bd p = fromMaybe '#' <$> readPosM bd p
+{-# INLINEABLE readPos #-}
 
 readPosM :: (MonadPlus f, MonadIO m) => Board -> Pos -> m (f Char)
 readPosM bd p@(Pos x y) = whenInBoundPos bd p mzero $ do
   row <- GM.read bd y
   return <$> GM.read row x
+{-# INLINEABLE readPosM #-}
 
 writePos :: MonadIO m => Board -> Pos -> Char -> m ()
 writePos bd p@(Pos x y) v = whenInBoundPos bd p () $ do
   row <- GM.read bd y
   GM.write row x v
+{-# INLINEABLE writePos #-}

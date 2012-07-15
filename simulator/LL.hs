@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses, UndecidableInstances #-}
-{-# LANGUAGE RecordWildCards, ViewPatterns #-}
+{-# LANGUAGE RecordWildCards, ViewPatterns, BangPatterns #-}
 
 module LL (
   -- simulate whole game
@@ -20,7 +20,7 @@ module LL (
   whenInBoundPos,
   readPos, readPosM, writePos,
   getReplay,
-
+  getAbortTejun,
   -- full backup, and restore (maybe heave...)
   backupState, restoreState, withBackup,
 
@@ -55,6 +55,7 @@ import Data.Word
 import System.IO
 import Text.Printf
 
+import AI.Oracle(Oracle)
 import qualified Ans
 import qualified Flood
 import Pos
@@ -216,6 +217,9 @@ showBoard = do
       putStr =<< forM [0..w-1] (\x -> readPos llBoard $ Pos x y)
       putStrLn $ if y < wl then "~~~~" else "    "
 
+getAbortTejun ::  (Functor m, MonadIO m) => LLT m Tejun
+getAbortTejun = Tejun <$> abortScore <*> pure Abort <*> getReplay
+
 getReplay :: (Functor m, MonadIO m) => LLT m String
 getReplay = reverse . map pMove <$> access llPatchesL
 
@@ -254,6 +258,7 @@ withStep mv m = do
   ret <- m
   undo
   return ret
+{-# INLINEABLE withStep #-}
 
 simulateStep :: (Functor m, MonadIO m) => Char -> LLT m ()
 simulateStep mv = do
@@ -265,27 +270,27 @@ simulateStep mv = do
     return ()
 
     else do
-    wlog <- liftIO $ newIORef []
-    xlog <- liftIO $ newIORef []
-    rlog <- liftIO $ newIORef []
     bd <- access llBoardL
+
+    wlog <- liftIO $ newIORef []
+    rlog <- liftIO $ newIORef []
+    xlog <- liftIO $ newIORef 0
 
     let write p v = do
           c <- readPos bd p
           modifyIORef rlog $ ((p, c):)
           modifyIORef wlog $ ((p, v):)
+          modifyIORef xlog (`xor` (hashChar p v `xor` hashChar p c))
         commit = do
           wl <- readIORef wlog
           forM_ (reverse wl) $ \(p, v) -> writePos bd p v
-          modifyIORef xlog $ (wl++)
           writeIORef wlog []
 
     moveC mv write >> liftIO commit
     update write commit
 
     diff <- liftIO $ readIORef rlog
-    eiff <- liftIO $ readIORef xlog
-    let hash = foldl' xor 0 $ map (\(p, c) -> hashChar p c) $ diff ++ eiff
+    hash <- liftIO $ readIORef xlog
     llHashL %= xor hash
     llPatchesL %= \(p:ps) -> (p { pBoardDiff = diff, pHash = hash }:ps)
     return ()
@@ -376,70 +381,75 @@ update wlog commit = do
 
   let growing = llStep `mod` llGrowth == llGrowth - 1
 
-  cands <-
+  cands <- {-# SCC "update/generateCands" #-}
     if not growing then return llRockPos
     else sortp . (llRockPos ++) . map fst <$> searchBoard (=='W')
 
   dior <- liftIO $ newIORef False
+  rrocks <- liftIO $ newIORef []
 
-  newRocks <- liftIO $ forM cands $ \p -> do
+  {-# SCC "update/updateRock" #-} liftIO $ forM_ cands $ \ !p -> do
     -- la [ca] ra
     -- lb  cb  rb
     -- lc  cc  rc
-    let pla = p + Pos (-1) 0
-        plb = p + Pos (-1) (-1)
-        plc = p + Pos (-1) (-2)
-        pca = p + Pos 0    0
-        pcb = p + Pos 0    (-1)
-        pcc = p + Pos 0    (-2)
-        pra = p + Pos 1    0
-        prb = p + Pos 1    (-1)
-        prc = p + Pos 1    (-2)
+    let !pla = p + Pos (-1) 0
+        !plb = p + Pos (-1) (-1)
+        !plc = p + Pos (-1) (-2)
+        !pca = p + Pos 0    0
+        !pcb = p + Pos 0    (-1)
+        !pcc = p + Pos 0    (-2)
+        !pra = p + Pos 1    0
+        !prb = p + Pos 1    (-1)
+        !prc = p + Pos 1    (-2)
 
-    la <- readPos llBoard pla
-    lb <- readPos llBoard plb
-    lc <- readPos llBoard plc
-    ca <- readPos llBoard pca
-    cb <- readPos llBoard pcb
-    cc <- readPos llBoard pcc
-    ra <- readPos llBoard pra
-    rb <- readPos llBoard prb
-    rc <- readPos llBoard prc
+    !la <- readPos llBoard pla
+    !lb <- readPos llBoard plb
+    !lc <- readPos llBoard plc
+    !ca <- readPos llBoard pca
+    !cb <- readPos llBoard pcb
+    !cc <- readPos llBoard pcc
+    !ra <- readPos llBoard pra
+    !rb <- readPos llBoard prb
+    !rc <- readPos llBoard prc
 
     case () of
       _ | ca == 'W' -> do
             forM_ adjacent $ \((pca+) -> pw) -> do
-              cell <- readPos llBoard pw
+              !cell <- readPos llBoard pw
               when (cell == ' ') $ wlog pw 'W'
-            return pca
+            modifyIORef rrocks (pca:)
 
         | isRock ca &&
           cb == ' ' -> do
+            let rr = if ca == '@' && cc /= ' ' then '\\' else ca
             wlog pca ' '
-            wlog pcb $ if ca == '@' && cc /= ' ' then '\\' else ca
+            wlog pcb rr
             when (cc == 'R') $ writeIORef dior True
-            return pcb
+            when (isRock rr) $ modifyIORef rrocks (pcb:)
         | isRock ca && ra == ' ' &&
           isRock cb && rb == ' ' -> do
+            let rr = if ca == '@' && rc /= ' ' then '\\' else ca
             wlog pca ' '
-            wlog prb $ if ca == '@' && rc /= ' ' then '\\' else ca
+            wlog prb rr
             when (rc == 'R') $ writeIORef dior True
-            return prb
+            when (isRock rr) $ modifyIORef rrocks (prb:)
         | la == ' ' && isRock ca &&
           lb == ' ' && isRock cb -> do
+            let rr = if ca == '@' && lc /= ' ' then '\\' else ca
             wlog pca ' '
-            wlog plb $ if ca == '@' && lc /= ' ' then '\\' else ca
+            wlog plb rr
             when (lc == 'R') $ writeIORef dior True
-            return plb
+            when (isRock rr) $ modifyIORef rrocks (plb:)
         | isRock ca  && ra == ' ' &&
           cb == '\\' && rb == ' ' -> do
+            let rr = if ca == '@' && rc /= ' ' then '\\' else ca
             wlog pca ' '
-            wlog prb $ if ca == '@' && rc /= ' ' then '\\' else ca
+            wlog prb rr
             when (rc == 'R') $ writeIORef dior True
-            return prb
+            when (isRock rr) $ modifyIORef rrocks (prb:)
 
       _ ->
-        return pca
+        when (ca == '*') $ modifyIORef rrocks (pca:)
 
   -- lambda complete!
   liftIO $ when (llLambdas == llTotalLambdas) $ do
@@ -449,11 +459,12 @@ update wlog commit = do
   liftIO commit
 
   -- sanitize rocks' pos
-  newRocks' <- liftIO $
-    filterM (\p -> isRock <$> readPos llBoard p) newRocks
+  -- newRocks' <- {-# SCC "update/sanitize" #-} liftIO $
+  --   filterM (\p -> isRock <$> readPos llBoard p) newRocks
 
   -- rocks must be sorted
-  llRockPosL ~= sortp newRocks'
+  newRocks <- liftIO $ readIORef rrocks
+  llRockPosL ~= sortp newRocks
 
   cup <- liftIO $ readPos llBoard $ llPos + Pos 0 1
   dead <- liftIO $ readIORef dior
@@ -567,29 +578,38 @@ loopPos m = do
   foreach [ Pos x y | y <- [0..h-1], x <- [0..w-1] ] $ \pos -> do
     m pos
 
-whenInBoundPos :: U.Unbox x => Field x -> Pos -> a -> IO a -> IO a
+whenInBoundPos :: U.Unbox x => Field x -> Pos -> a -> (x -> IO a) -> IO a
 whenInBoundPos bd (Pos x y) def action = do
-  let h = GM.length bd
-  w <- GM.length <$> GM.unsafeRead bd 0
-  if x >= 0 && x < w && y >= 0 && y < h
-    then action
+  if y >= 0 && y < GM.length bd
+    then do
+    row <- GM.unsafeRead bd y
+    if x >= 0 && x < GM.length row
+      then action =<< GM.unsafeRead row x
+      else return def
     else return def
 {-# INLINEABLE whenInBoundPos #-}
 
 readPos :: Board -> Pos -> IO Char
-readPos bd p = fromMaybe '#' <$> readPosM bd p
-{-# INLINEABLE readPos #-}
+readPos bd (Pos x y) = do
+  if y >= 0 && y < GM.length bd
+    then do
+    row <- GM.unsafeRead bd y
+    if x >= 0 && x < GM.length row
+      then GM.unsafeRead row x
+      else return '#'
+    else return '#'
+{-# INLINE readPos #-}
 
 readPosM :: MonadPlus f => Board -> Pos -> IO (f Char)
-readPosM bd p@(Pos x y) = whenInBoundPos bd p mzero $ do
-  row <- GM.unsafeRead bd y
-  return <$> GM.unsafeRead row x
+readPosM bd p = whenInBoundPos bd p mzero $ return . return
 {-# INLINEABLE readPosM #-}
 
 writePos :: MonadIO m => Board -> Pos -> Char -> m ()
-writePos bd p@(Pos x y) v = liftIO $ whenInBoundPos bd p () $ do
-  row <- GM.unsafeRead bd y
-  GM.unsafeWrite row x v
+writePos bd (Pos x y) v = liftIO $ do
+  when (y >= 0 && y < GM.length bd) $ do
+    row <- GM.unsafeRead bd y
+    when (x >= 0 && x < GM.length row) $
+      GM.unsafeWrite row x v
 {-# INLINEABLE writePos #-}
 
 searchBoard :: MonadIO m => (Char -> Bool) -> LLT m [(Pos, Char)]

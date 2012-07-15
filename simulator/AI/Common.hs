@@ -36,4 +36,4 @@ safetynet m = do
           "warning; You cannot undo in Real world!"
         return $ Ans.Cont 'A'
 
-data Tejun = Tejun Int Result String deriving (Eq,Ord,Show,Read)
+

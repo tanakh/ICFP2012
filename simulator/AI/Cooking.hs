@@ -8,20 +8,20 @@ import           Pos
 import System.Random
 
 
-newtype Wave = 
-  Wave  
+newtype Wave =
+  Wave
   [(Double, -- amplitude
     Double, -- freq
     Double -- initial phase
     )] deriving (Eq, Show, Read)
 
 toAmp :: Double -> Wave -> Double
-toAmp t (Wave xs) = 
+toAmp t (Wave xs) =
   sum $ map (\(a,f,p0) -> a*cos(f*t+p0)) xs
 
 toAmp2 :: Double -> Wave -> Dpos
-toAmp2 t (Wave xs) = 
-  sum $ map (\(a,f,p0) -> Pos (a*cos(f*t+p0)) (a*sin(f*t+p0)) ) xs
+toAmp2 t (Wave xs) =
+  sum $ map (\(a,f,p0) -> Dpos (a*cos(f*t+p0)) (a*sin(f*t+p0)) ) xs
 
 
 theRecipe :: Recipe
@@ -39,7 +39,7 @@ theRecipe = Recipe
     powerMin = -1,
     powerMax = -1
          }
- 
+
 allChars = "R*L.#\\O @!WA1"
 
 randomRecipe :: IO Recipe
@@ -50,21 +50,21 @@ randomRecipe = do
     else  randomRecipe1
 
 randomRecipe1 :: IO Recipe
-randomRecipe1 = Recipe 
-  <$> randomRIO (-8, 4) 
-  <*> randomRIO (-8, 4) 
-  <*> randomRIO (-8, 4) 
-  <*> randomRIO (-8, 4) 
+randomRecipe1 = Recipe
+  <$> randomRIO (-8, 4)
+  <*> randomRIO (-8, 4)
+  <*> randomRIO (-8, 4)
+  <*> randomRIO (-8, 4)
 
-  <*> randomRIO (0, 3) 
+  <*> randomRIO (0, 3)
 
-  <*> randomRIO (0, 20) 
-  <*> randomRIO (0, 20) 
+  <*> randomRIO (0, 20)
+  <*> randomRIO (0, 20)
   <*> (choose $ powerset1 $ allChars)
   <*> (choose $ powerset1 $ allChars)
-  <*> randomRIO (-4, 2) 
-  <*> randomRIO (-4, 2) 
-data Recipe = 
+  <*> randomRIO (-4, 2)
+  <*> randomRIO (-4, 2)
+data Recipe =
   Recipe {
     windFreqMin :: Double,
     windFreqMax :: Double,
@@ -79,10 +79,10 @@ data Recipe =
     powerMax :: Double
          }
 
-data Config = 
-  Config 
+data Config =
+  Config
   {
-    searchAtom :: 
+    searchAtom ::
        [(Wave, -- weight
          String, -- source terrains
          String,  -- passable terrains
@@ -95,7 +95,7 @@ data Config =
   } deriving (Eq, Show, Read)
 
 randomConfig :: Recipe -> IO Config
-randomConfig r = 
+randomConfig r =
   Config <$> randomSearchAtom r <*> randomMany (weightAtomNum r) (randomWindAtom1 r)
 
 normalConfig :: Config
@@ -106,11 +106,11 @@ choose xs = do
   i <- randomRIO (0,length xs-1)
   return $ xs !! i
 
-normalSearchAtom = 
+normalSearchAtom =
     (Wave [(2.302, 0, 0)], "\\O", " .", -1)
 
 randomSearchAtom :: Recipe -> IO [(Wave, String, String, Double)]
-randomSearchAtom r = 
+randomSearchAtom r =
   (normalSearchAtom :) <$> randomMany (searchAtomNum r) (randomSearchAtom1 r)
 
 powerset1 :: [a] -> [[a]]
@@ -148,5 +148,3 @@ randomMany num m = do
                 then randomMany num m
                 else return []
   return $ x:xs
-
-

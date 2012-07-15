@@ -15,7 +15,7 @@ build-type:          Simple
 cabal-version:       >=1.8
 
 library
-  ghc-options:         -auto-all
+  ghc-options:         -O2 -auto-all
   exposed-modules:     Ans
                        AI.Common
                        AI.Cooking
@@ -44,6 +44,7 @@ library
                      , process
                      , random
                      , containers
+                     , unix
 
 executable ll-simulator
   ghc-options:         -O2 -auto-all
@@ -98,7 +99,7 @@ executable ll-ai-babayaga
   main-is:             ../AI/BabaYaga.hs
   build-depends:       base ==4.5.*, simulator
                      , vector, data-lens-fd, mtl, control-monad-loop, stm
-  buildable:           True
+  buildable:           False
 
 --cabal configure --enable-library-profiling --enable-executable-profiling
 -- ./dist/build/ll-ai-tuja/ll-ai-tuja -i ../data/contest10.map -s -v +RTS -Pa

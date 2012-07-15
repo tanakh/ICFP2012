@@ -42,10 +42,10 @@ unsafeWriteF :: (U.Unbox a, MonadIO m)=>Field a -> Pos -> a -> m ()
 unsafeWriteF bd r val = liftIO $ unsafeWriteFIO bd r val
 
 readFList :: (MonadIO m, U.Unbox a) => Field a -> Pos -> m [a]
-readFList bd r = liftIO $ whenInBoundPos bd r [] ((:[]) <$> unsafeReadF bd r)
+readFList bd r = liftIO $ whenInBoundPos bd r [] (return . (:[]))
 
 writeF :: (MonadIO m, U.Unbox a) => Field a -> Pos -> a -> m ()
-writeF bd r val = liftIO $ whenInBoundPos bd r () (unsafeWriteF bd r val)
+writeF bd r val = liftIO $ whenInBoundPos bd r () (\_ -> unsafeWriteF bd r val)
 
 convertF :: (U.Unbox a, U.Unbox b, MonadIO m)
             => Field a -> (a->b) -> LLT m (Field b)
@@ -104,8 +104,8 @@ class (Eq a, Ord a, Num a) => Terrain a where
   terrainSucc x = if isPassable x then x+1 else x
 
 instance Terrain Int where
-  unknown = minBound-2
-  blocked = minBound-1
+  unknown = maxBound-2
+  blocked = maxBound-1
 instance Terrain Double where
   unknown = 8901e35
   blocked = 1341e72

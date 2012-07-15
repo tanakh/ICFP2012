@@ -65,10 +65,14 @@ main = do
       res0 <- initResource
       recipe <- randomRecipe
       config <- randomConfig recipe
-      let res 
-            | Option.verbose opt = res0{submitter = printe}
-            | otherwise          = res0
-      (Tejun sco res rep) <- runLLT txt $ simpleSolver res config
+      tejunRef <- newIORef $ Tejun 0 Abort "A"
+      let res = res0{
+          submitter  = \tejun ->  do
+            modifyIORef tejunRef (max tejun)
+            when (Option.verbose opt) $ printe tejun
+        }
+      runLLT txt $ simpleSolver res config
+      Tejun sco res rep <- readIORef tejunRef
       let fnInput = case Option.input opt of
             Option.InputFile fp -> fp
             Option.Stdin -> "STDIN"  

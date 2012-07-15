@@ -18,11 +18,13 @@ library
                      , bytestring
                      , process
                      , aeson
+                     , simulator
 executable run_ais
   ghc-options:         -O3 -auto-all -threaded -Wall
   hs-source-dirs:      dist
   main-is:             ../run_ais.hs
   build-depends:       base >= 4.5
+                     , simulator
                      , matchlist
                      , time
                      , bytestring

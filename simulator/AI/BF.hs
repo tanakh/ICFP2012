@@ -10,7 +10,6 @@ import qualified Data.HashMap.Strict as HM
 import Data.IORef
 import qualified Data.Vector.Mutable as VM
 import Data.List
-import qualified Data.HashSet as HS
 import Data.Lens
 import Data.Word
 import Data.Ord
@@ -44,6 +43,23 @@ data CacheEntry
     , ceRazors    :: {-# UNPACK #-} !Int
     }
 
+type History = IORef (HM.HashMap Word64 Int)
+
+readHistory :: History -> Word64 -> IO Int
+readHistory hist key = do
+  hm <- readIORef hist 
+  case HM.lookup key hm of
+    Just x  -> return x
+    Nothing -> do
+      modifyIORef hist $ HM.insert key 0
+      return 0
+
+modifyHistory :: History -> Word64 -> (Int -> Int)->IO ()
+modifyHistory hist key f = do
+  x <- readHistory hist key
+  modifyIORef hist $ HM.insert key (f x)
+
+
 isWorseThan :: CacheEntry -> CacheEntry -> Bool
 a `isWorseThan` b =
   ceStep a >= ceStep b
@@ -61,20 +77,24 @@ addCacheEntry hmr st = do
     modifyIORef hmr $ HM.insertWith (++) (llHash st) [ce]
   return cm
 
-safetyCheck :: HS.HashSet Word64 -> Int ->  Char -> LL Bool
-safetyCheck hist fuel hand
+goodnessCheck :: History -> Int ->  Char -> LL Int
+goodnessCheck hist fuel hand
   | fuel <= 0 = withStep hand $ do
                        res <- access llResultL
                        h <- access llHashL
-                       return $ res /= Dead && not (HS.member h hist)
-  | otherwise = withStep hand $
-                     or <$> (forM "LRUD" $ safetyCheck hist (fuel-1))
+                       cnt <- liftIO $ readHistory hist h
+                       return $ case () of
+                                  _ | res == Dead -> -2
+                                    | cnt > 0     -> -1
+                                    | True        ->  0
+  | otherwise = withStep hand $ do
+                    gs <- (forM "LRUD" $ goodnessCheck hist (fuel-1))
+                    return $ maximum gs
 main :: IO ()
 main = do
   opt <- Option.parseIO
-  historyRef <- newIORef HS.empty
+  history <- newIORef HM.empty
   valueFieldRef <- newIORef undefined
-  hashLogRef <- newIORef []
   let inputfn = case Option.input opt of
             Option.InputFile fp -> fp
             Option.Stdin -> "STDIN"
@@ -93,15 +113,10 @@ main = do
   
       bfDepth <- liftIO $ Oracle.ask oracle "bfDepth" $ return 10
       hmr <- liftIO $ newIORef HM.empty
+
       hashNow <- access llHashL
-      
-      kabutta <- liftIO $ do
-             modifyIORef hashLogRef (hashNow:)
-             xs <- readIORef hashLogRef
-             return $ (length (take 3 xs) >= 3) && ((1==) $length $ nub $take 3 xs)
-      liftIO $ modifyIORef historyRef $ HS.insert hashNow
-      history <- liftIO $ readIORef historyRef
-  
+      kabutta <- (>2) <$> (liftIO $ readHistory history hashNow)
+      liftIO $ modifyHistory history hashNow (1+)  
   
       (mov, sc) <- withBackup $ do
         rs <- forM moves $ \mov -> withStep mov $ do
@@ -122,7 +137,7 @@ main = do
       (mov2, confidence) <-  do
                cand <- forM "LRUD" $ \hand -> do
                      val3 <- unsafeReadF valueField $ roboPos + hand2pos hand
-                     flag <- safetyCheck history greedyDepth hand
+                     flag <- goodnessCheck history greedyDepth hand
                      return ((flag,val3), hand)
                let top = last $ sort $ cand
                return $ (snd top {-move-}, fst (fst top) {-whether it was safe-})
@@ -135,7 +150,7 @@ main = do
            | perfectGreedy                              = mov2
            | combineBFFirst && (mov /= 'A' || val <= 0) = mov
            | combineBFFirst                             = mov2
-           | not (combineBFFirst) && confidence         = mov2
+           | not (combineBFFirst) && (confidence < 0)   = mov2
            | otherwise                                  = mov
   
       when (Option.verbose opt) $ liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++  [mov,mov2]

@@ -12,6 +12,8 @@ import Pos
 
 type Field a = VM.IOVector (UM.IOVector a)
 
+data Tejun = Tejun Int Result String deriving (Eq,Ord,Show,Read)
+
 type Board = Field Char
 
 data Result

@@ -159,7 +159,7 @@ main = do
     Oracle.load oracle $ Option.oracleSource opt
   hyperHistory <- newIORef HM.empty  
 
-  infiniteLoop <- liftIO $ Oracle.ask oracle "infiniteLoop" $ return False
+  infiniteLoop <- liftIO $ Oracle.ask oracle "infiniteLoop" $ return (Option.input == )
   (if infiniteLoop then forever else id) $ do
     -- generate randomize parameters
     motionWeight <- forM "LRUD" $ \char -> do
@@ -178,8 +178,8 @@ main = do
     defaultMain oracle $ do
       step <- access llStepL
       (liftIO . Oracle.submit oracle) =<< getAbortTejun
-  
-      bfDepth <- liftIO $ Oracle.ask oracle "bfDepth" $ return 15
+      (w,h) <- getSize
+      bfDepth <- liftIO $ Oracle.ask oracle "bfDepth" $ return (if w+h > 32 then 2 else 16)
       hmr <- liftIO $ newIORef HM.empty
 
       hashNow <- access llHashL
@@ -259,8 +259,8 @@ main = do
                return $ (snd top {-move-}, fst (fst top) {-whether it was safe-})
   
       combineBFFirst <- liftIO $ Oracle.ask oracle "combineBFFirst" $ return True
-      perfectGreedy <- liftIO $ Oracle.ask oracle "perfectGreedy" $ return False
-      perfectSearch <- liftIO $ Oracle.ask oracle "perfectSearch" $ return  True
+      perfectGreedy <- liftIO $ Oracle.ask oracle "perfectGreedy" $ return (w+h>80)
+      perfectSearch <- liftIO $ Oracle.ask oracle "perfectSearch" $ return (w+h<40)
       movRand <- liftIO $ choose "RLDU"
       let mov3
            | kabutta  && perfectGreedy                  = 'A'

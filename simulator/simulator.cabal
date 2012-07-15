@@ -44,6 +44,7 @@ library
                      , process
                      , random
                      , containers
+                     , unix
 
 executable ll-simulator
   ghc-options:         -O2 -auto-all

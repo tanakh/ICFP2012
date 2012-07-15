@@ -15,7 +15,7 @@ build-type:          Simple
 cabal-version:       >=1.8
 
 library
-  ghc-options:         -auto-all
+  ghc-options:         -O2 -auto-all
   exposed-modules:     Ans
                        AI.Common
                        AI.Cooking
@@ -44,6 +44,7 @@ library
                      , process
                      , random
                      , containers
+                     , unix
 
 executable ll-simulator
   ghc-options:         -O2 -auto-all

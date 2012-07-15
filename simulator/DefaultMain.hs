@@ -1,13 +1,18 @@
 module DefaultMain (defaultMain) where
 
 import Control.Concurrent
+import Control.Concurrent.STM
 import Control.Monad
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Digest.Pure.MD5
+import System.Exit
 import System.IO
 import System.Cmd
 import System.FilePath
 import Text.Printf
+import System.Posix.Signals
+import System.Posix.Process
+
 
 import qualified AI.Oracle as Oracle
 import           LL
@@ -24,6 +29,14 @@ defaultMain oracle theSolver = do
     Option.InputFile fn -> readFile fn
   ansMVar <- newEmptyMVar
   stateMVar <- newEmptyMVar
+  
+  myProcID <- getProcessID
+  let handler = do
+       Tejun _ _ rep <- atomically $ readTVar (Oracle.tejunVar oracle)
+       Oracle.save oracle  
+       putStrLn rep
+       signalProcess sigKILL myProcID
+  installHandler sigINT (Catch handler) Nothing
 
   solver <- case Option.answer opt of
     Option.AnswerFile ansfn -> do

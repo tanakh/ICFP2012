@@ -1,7 +1,15 @@
 #!/usr/bin/env ruby
 
-pid = spawn("./dist/build/ll-ai-bf/ll-ai-bf -i ../officialmap/contest10.map -v -o conf.txt")
+require 'timeout'
 
-sleep 3
+pid = fork{
+  exec("./dist/build/ll-ai-bf/ll-ai-bf -i ../officialmap/contest10.map -v -o conf.txt")
+}
 
-Process.kill(2,pid)
+begin
+  timeout(1){
+    Process.wait(pid)
+  }
+rescue Timeout::Error
+  Process.kill(2,pid)
+end

@@ -3,11 +3,15 @@
 import Options.Applicative
 
 import System.Exit (ExitCode (..))
-import System.Process as P
 import qualified Filesystem as FS
 import qualified Filesystem.Path.CurrentOS as FP
 import qualified System.FilePath as FilePath
 import qualified System.IO as IO
+
+import qualified GHC.IO.Handle as H
+
+import qualified System.Posix.Process as P
+import System.Posix.Types (ProcessID (..))
 
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Lazy.Char8 as BL8
@@ -95,6 +99,18 @@ getAnswer ansfile = do
     then return ""
     else return $ last lst
 
+createProcess
+  :: FilePath -> [String] -> H.Handle -> H.Handle
+  -> IO ProcessID
+createProcess cmd args stdo stde = P.forkProcess $ do
+  stdout_dup <- H.hDuplicate IO.stdout
+  H.hDuplicateTo stdo IO.stdout
+  H.hClose stdo
+  stderr_dup <- H.hDuplicate IO.stderr
+  H.hDuplicateTo stde IO.stderr
+  H.hClose stde
+  P.executeFile cmd True args Nothing
+
 runAI :: FilePath
       -> FilePath
       -> Maybe FilePath
@@ -115,15 +131,16 @@ runAI aipath mappath dest basename wait waitm = do
     IO.withFile errfn IO.WriteMode $ \herr -> do
       start <- getCurrentTime
       result <- newEmptyMVar
-      (_, _, _, pid) <- P.createProcess (P.proc aipath ["-i", mappath, "-t", show wait, "-v"])
-        { std_out = UseHandle hout
-        , std_err = UseHandle herr
-        , cwd = dest
-        }
-      th <- forkIO $ P.waitForProcess pid >>= putMVar result . Just
+
+      pid <- createProcess aipath ["-i", mappath, "-t", show wait, "-v"] hout herr
+      th <- forkIO $ do
+        ret <- P.getProcessStatus Trule False pid
+        
+        putMVar result . Just
       wth <- forkIO $ do
         putStrLn $ "waiting for " ++ basename ++ " " ++ show wait
-        threadDelay ((wait + waitm) * 1000 * 1000)
+        threadDelay (wait * 1000 * 1000)
+        putStrLn $ "send SIGINT: " ++ basename ++ " waiting: " ++ show waitm
         P.terminateProcess pid
         killThread th
         putStr $ "terminated " ++ basename

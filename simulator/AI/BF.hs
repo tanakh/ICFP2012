@@ -1,4 +1,4 @@
-{-# LANGUAGE TupleSections, ViewPatterns, RecordWildCards #-}
+{-# LANGUAGE TupleSections, ViewPatterns, RecordWildCards, BangPatterns #-}
 
 module Main (main) where
 
@@ -28,6 +28,8 @@ import qualified Option
 minf :: Int
 minf = -10^(9::Int)
 
+type LL = LLT IO
+
 type Cache = IORef (HM.HashMap Word64 [CacheEntry])
 
 data CacheEntry
@@ -54,8 +56,8 @@ addCacheEntry hmr st = do
     modifyIORef hmr $ HM.insertWith (++) (llHash st) [ce]
   return cm
 
-safetyCheck ::(Functor m,MonadIO m)=> HS.HashSet Word64 -> Int ->  Char -> LLT m Bool
-safetyCheck hist fuel hand 
+safetyCheck :: HS.HashSet Word64 -> Int ->  Char -> LL Bool
+safetyCheck hist fuel hand
   | fuel <= 0 = withStep hand $ do
                        res <- access llResultL
                        h <- access llHashL
@@ -80,11 +82,11 @@ main = do
     hashNow <- access llHashL
     liftIO $ modifyIORef historyRef $ HS.insert hashNow
     history <- liftIO $ readIORef historyRef
-    (mov, sc) <- withBackup $ search undefined hmr bfDepth
+    (mov, sc) <- withBackup $ search undefined hmr 0 bfDepth
 
     greedyDepth <- liftIO $ Oracle.ask oracle "greedyDepth" $ return 4
-    valueField <- if step > 0 then liftIO $ readIORef valueFieldRef 
-                              else do 
+    valueField <- if step > 0 then liftIO $ readIORef valueFieldRef
+                              else do
                                   ret <- newF (0::Int)
                                   liftIO $ writeIORef valueFieldRef ret
                                   return ret
@@ -95,13 +97,13 @@ main = do
     (mov2, confidence) <-  do
              cand <- forM "LRUD" $ \hand -> do
                    val3 <- unsafeReadF valueField $ roboPos + hand2pos hand
-                   flag <- safetyCheck history greedyDepth hand 
+                   flag <- safetyCheck history greedyDepth hand
                    return ((flag,val3), hand)
              let top = last $ sort $ cand
              return $ (snd top {-move-}, fst (fst top) {-whether it was safe-})
-    
+
     combineBFFirst <- liftIO $ Oracle.ask oracle "combineBFFirst" $ return True
-    let mov3 
+    let mov3
          | combineBFFirst && (mov /= 'A' || val <= 0) = mov
          | combineBFFirst                             = mov2
          | not (combineBFFirst) && confidence         = mov2
@@ -110,9 +112,8 @@ main = do
     liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++  [mov,mov2]
     return $ Ans.Cont mov3
 
-best :: (Functor m, MonadIO m)
-        => [Char] -> (Char -> LLT m Int) -> LLT m (Char, Int)
-best ls m = do
+best :: Cache -> [Char] -> (Char -> LL Int) -> LL (Char, Int)
+best cache ls m = do
   res <- forM ls $ \x -> do
     bef <- get
     case () of
@@ -126,9 +127,8 @@ best ls m = do
         return (x, r)
   return $ maximumBy (comparing snd) res
 
-search :: (MonadIO m, Functor m)
-          => Field Int -> Cache -> Int -> LLT m (Char, Int)
-search valueField cache fuel
+search :: Field Int -> Cache -> Int -> Int -> LL (Char, Int)
+search valueField cache curBest fuel
   | fuel <= 0 =
     (undefined,) <$> staticScore valueField
   | otherwise = do
@@ -137,17 +137,18 @@ search valueField cache fuel
     ok <- liftIO $ addCacheEntry cache st
     if ok
       then do
-      best choices $ \mov -> do
+      best cache choices $ \mov -> do
         mb <- score
         -- liftIO $ putStrLn $ "fuel: " ++ show fuel ++ ", mov: " ++ [mov]
         -- showStatus
         case mb of
-          Nothing -> snd <$> search valueField cache (fuel - 1)
-          Just sc -> return sc
-      else do
-      return ('W', minf)
+          Nothing ->
+            snd <$> search valueField cache curBest (fuel - 1)
+          Just sc ->
+            return sc
+      else return ('A', minf)
 
-staticScore :: (MonadIO m, Functor m) => Field Int -> LLT m Int
+staticScore :: Field Int -> LL Int
 staticScore valueField = do
   abortScore
   {-

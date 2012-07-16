@@ -112,3 +112,14 @@ executable ll-ai-tuja
                        , pqueue,vector, data-lens-fd, mtl, control-monad-loop
                        , stm, containers, unix, random,filepath, bytestring,pureMD5
                        , process
+
+
+executable ll-ai-pg
+  ghc-options:         -auto-all -rtsopts
+  hs-source-dirs:      dist
+  main-is:             ../AI/ParallelGreedy.hs
+  build-depends:       base ==4.5.*, simulator, mtl
+                       , pqueue,vector, data-lens-fd, mtl, control-monad-loop
+                       , stm, containers, unix, random,filepath, bytestring,pureMD5
+                       , process
+                       , unordered-containers

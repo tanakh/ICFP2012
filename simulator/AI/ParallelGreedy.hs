@@ -82,7 +82,7 @@ main = do
     step <- access llStepL
     (liftIO . Oracle.submit oracle) =<< getAbortTejun
 
-    bfDepth <- liftIO $ Oracle.ask oracle "bfDepth" $ return 10
+    bfDepth <- liftIO $ Oracle.ask oracle "bfDepth" $ return 2
     hmr <- liftIO $ newIORef HM.empty
     hashNow <- access llHashL
     
@@ -95,18 +95,9 @@ main = do
 
 
     (mov, sc) <- withBackup $ do
-      rs <- forM moves $ \mov -> do
-        cur <- get
-        b <- prePruning cur mov
-        if b
-          then do
-          withStep mov $ do
-            next <- get
-            c <- pruning cur mov next
-            if c
-              then (mov, ) <$> eval undefined hmr 0 bfDepth
-              else return (mov, minf)
-          else return (mov, minf)
+      rs <- forM moves $ \mov -> withStep mov $ do
+        -- TODO: unify
+        (mov, ) <$> eval undefined hmr 0 bfDepth
       return $ maximumBy (comparing snd) rs
 
     greedyDepth <- liftIO $ Oracle.ask oracle "greedyDepth" $ return 4
@@ -138,8 +129,7 @@ main = do
          | not (combineBFFirst) && confidence         = mov2
          | otherwise                                  = mov
 
-    when (Option.verbose opt) $
-      liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++  [mov,mov2]
+    when (Option.verbose opt) $ liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++  [mov,mov2]
     return $ Ans.Cont mov3
 
 prePruning :: LLState -> Char -> LL Bool
@@ -158,9 +148,7 @@ pruning cur move next
 
 staticScore :: Field Int -> LL Int
 staticScore _ = do
-  LLState {..} <- get
-  abt <- abortScore
-  return abt
+  abortScore
   {-
   aScore <- abortScore
   pos <- access llPosL
@@ -170,21 +158,24 @@ staticScore _ = do
   -}
 
 eval :: Field Int -> Cache -> Int -> Int -> LL Int
-eval valueField cache !curBest !fuel = do
-  mb <- score
-  case mb of
-    Just sc -> return sc
-    _ | fuel <= 0 -> staticScore valueField
-    _ -> do
-      st <- get
-      ok <- liftIO $ addCacheEntry cache st
-      if ok
-        then do
-        best cache moves $ \mov -> do
-          -- liftIO $ putStrLn $ "fuel: " ++ show fuel ++ ", mov: " ++ [mov]
-          -- showStatus
-          eval valueField cache curBest (fuel - 1)
-        else return minf
+eval valueField cache !curBest !fuel
+  | fuel <= 0 =
+    staticScore valueField
+  | otherwise = do
+    st <- get
+    ok <- liftIO $ addCacheEntry cache st
+    if ok
+      then do
+      best cache moves $ \mov -> do
+        mb <- score
+        -- liftIO $ putStrLn $ "fuel: " ++ show fuel ++ ", mov: " ++ [mov]
+        -- showStatus
+        case mb of
+          Nothing ->
+            eval valueField cache curBest (fuel - 1)
+          Just sc ->
+            return sc
+      else return minf
 
 best :: Cache -> [Char] -> (Char -> LL Int) -> LL Int
 best cache ls m = do

@@ -1,4 +1,4 @@
 # Oracle
 # Configuration File.
 # Only The Fourth Line is important.
-fromList [("bfDepth","8"),("combineBFFirst","True"),("greedyDepth","2")]
+fromList [("bfDepth","2"),("combineBFFirst","False"),("perfectGreedy","True"),("greedyDepth","4")]

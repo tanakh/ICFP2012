@@ -235,10 +235,8 @@ simulate interactive txt solver = runLLT txt go where
     case mv of
       Ans.Undo -> undo -- assert interactive undo
       Ans.End     -> do
-        when (not interactive) $ liftIO $ putChar 'A' >> hFlush stdout
         simulateStep 'A'
       Ans.Cont ch -> do
-        when (not interactive) $ liftIO $ putChar ch >> hFlush stdout
         simulateStep ch
 
     mb <- score

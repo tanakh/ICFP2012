@@ -117,7 +117,7 @@ main = do
          | not (combineBFFirst) && confidence         = mov2
          | otherwise                                  = mov
 
-    liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++  [mov,mov2]
+    when (Option.verbose opt) $ liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++  [mov,mov2]
     return $ Ans.Cont mov3
 
 prePruning :: LLState -> Char -> LL Bool

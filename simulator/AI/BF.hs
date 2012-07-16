@@ -16,6 +16,7 @@ import Data.Word
 import Data.Ord
 import System.IO
 import System.Random
+import System.Posix.Unistd
 
 import Ans
 import AI.Common
@@ -246,7 +247,6 @@ main = do
             | razors > 0 = " .!\\RWA"
             | otherwise  = " .!\\RA"
       dijkstraEX valueField "\\O" passable motionWeight earthDrug loveField 0
-      showF (wideShow 5) valueField
       val <- unsafeReadF valueField roboPos
       (mov2, yabasa) <-  do
                cand <- forM "LRUD" $ \hand -> do
@@ -258,9 +258,11 @@ main = do
   
       combineBFFirst <- liftIO $ Oracle.ask oracle "combineBFFirst" $ return True
       perfectGreedy <- liftIO $ Oracle.ask oracle "perfectGreedy" $ return False
+      perfectSearch <- liftIO $ Oracle.ask oracle "perfectSearch" $ return  True
       movRand <- liftIO $ choose "RLDU"
       let mov3
            | kabutta  && perfectGreedy                  = 'A'
+           | perfectSearch                              = mov
            | perfectGreedy                              = mov2
            | combineBFFirst && (mov /= 'A' || val <= 0) = mov
            | combineBFFirst                             = mov2
@@ -268,8 +270,10 @@ main = do
            | otherwise                                  = mov
   
       when (Option.verbose opt) $ liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++  [mov,mov2]
+      liftIO $ sleep 100
       return $ Ans.Cont mov3
   
+
 
 
 

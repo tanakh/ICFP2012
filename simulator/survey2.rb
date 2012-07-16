@@ -6,9 +6,12 @@ require 'timeout'
 numThre = ARGV[0].to_i
 
 $mapFns = []
-$mapFns += `ls -1 ../smallmap/*.map`.split(/\n/)
-$mapFns += `ls -1 ../mediummap/*.map`.split(/\n/) 
 $mapFns += `ls -1 ../officialmap/*.map`.split(/\n/) 
+$mapFns += `ls -1 ../smallmap/*.map`.split(/\n/)
+$mapFns += `ls -1 ../mediummap/randmap32-*.map`.split(/\n/) 
+$mapFns += `ls -1 ../largemap/*-0.map`.split(/\n/) 
+$mapFns += `ls -1 ../largemap/*-1.map`.split(/\n/) 
+$mapFns += `ls -1 ../largemap/*-3.map`.split(/\n/) 
 
 q = Queue.new
 
@@ -16,17 +19,17 @@ tids = []
 
 
 `mkdir -p conf`
-[2,4,6,8,10].each{|bfDepth|
-  [2,4,6,8,10].each{|greedyDepth|
-    ['True', 'False'].each{|first|
-      conffn = "conf/#{bfDepth}-#{first}-#{greedyDepth}"
-      open(conffn,'w'){|fp| fp.puts <<CONF
+$mapFns.each{|mapfn|
+  [2,4].each{|greedyDepth|
+    [10,8,2,12].each{|bfDepth|
+      ['True', 'False'].each{|first|
+        conffn = "conf/#{bfDepth}-#{first}-#{greedyDepth}"
+        open(conffn,'w'){|fp| fp.puts <<CONF
 # Oracle
 # Configuration File.
 # Only The Fourth Line is important.
 fromList [("bfDepth","#{bfDepth}"),("combineBFFirst","#{first}"),("greedyDepth","#{greedyDepth}")]
 CONF
-        $mapFns.each{|mapfn|
           q.push([conffn, mapfn])
         }
       }

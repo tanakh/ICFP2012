@@ -1,9 +1,11 @@
 {- Takusan Utsuto Jissai Atariyasui. -}
+{-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS -Wall #-}
 module AI.GorinNoSho where
 
 import Control.Applicative
 import Control.Monad
+import Control.Monad.State.Strict
 import Control.Monad.Trans.Loop
 import Control.Monad.Trans
 import Data.Lens
@@ -122,12 +124,10 @@ wideShow width val
 dijkstra :: (MonadIO m, Functor m, Terrain a, U.Unbox a) =>
             Bool -> Field a -> String -> String -> a -> LLT m ()
 dijkstra robot field sourceStr passableStr initVal = do
-  bd <- access llBoardL
-  tramp <- access llTrampL
-  revtramp <- access llRevTrampL
+  LLState {..} <- get
   probes <- liftIO $ newIORef $ Q.empty
   forPos $ \ r -> do
-    a <- liftIO $ readPos bd r
+    a <- liftIO $ readPos llBoard r
     case a of
       _ | a `elem` sourceStr   -> do
            liftIO $ modifyIORef probes $ Q.insert (initVal, r)
@@ -139,17 +139,17 @@ dijkstra robot field sourceStr passableStr initVal = do
     (val, r) <- liftIO $ Q.findMin <$> readIORef probes
     liftIO $ modifyIORef probes Q.deleteMin
     oldVal <- unsafeReadF field r
-    c <- liftIO $ readPos bd r
+    c <- liftIO $ readPos llBoard r
     when (oldVal == unknown || (val < oldVal && oldVal /= blocked)) $ do
       writeF field r val
       case c of
         -- reverse trampoline
         _ | (not robot) && c `elem` targetChar -> do
-              let Just nears = map snd <$> lookup c revtramp
+              let Just nears = map snd <$> lookup c llRevTramp
               forM_ nears $ \n -> writeF field n unknown
               moveAdj probes val nears
           | robot && c `elem` trampoChar -> do
-              let Just (_, to, erases) = lookup c tramp
+              let Just (_, to, _) = lookup c llTramp
               -- forM_ erases $ \n -> writeF field n unknown -- useless?
               writeF field to unknown
               moveAdj probes val [to]

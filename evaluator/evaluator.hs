@@ -39,7 +39,7 @@ mySink :: Sink FilePath Machine ()
 mySink = awaitForever $ \fp -> do
   isData <- liftIO $ isFile fp
   when isData $ do
-    let hash = T.encodeUtf8 $ encode $ dirname fp
+    let hash = BS.pack $ encodeString $ dirname fp
     [_, score, prob, _, strategy] <- liftIO $ BS.lines <$>readFile fp
     lift $ tell $ Env (M.singleton (hash, prob) $ read $ BS.unpack score)
                       (M.singleton hash $ read $ BS.unpack strategy)

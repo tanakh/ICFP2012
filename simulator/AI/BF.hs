@@ -158,28 +158,21 @@ staticScore _ = do
   -}
 
 eval :: Field Int -> Cache -> Int -> Int -> LL Int
-eval valueField cache !curBest !fuel
-  | fuel <= 0 =
-    staticScore valueField
-  | otherwise = do
-    mb <- score
-    case mb of
-      Just sc -> return sc
-      Nothing -> do
-        st <- get
-        ok <- liftIO $ addCacheEntry cache st
-        if ok
-          then do
-          best cache moves $ \mov -> do
-            mb <- score
-            -- liftIO $ putStrLn $ "fuel: " ++ show fuel ++ ", mov: " ++ [mov]
-            -- showStatus
-            case mb of
-              Nothing ->
-                eval valueField cache curBest (fuel - 1)
-              Just sc ->
-                return sc
-          else return minf
+eval valueField cache !curBest !fuel = do
+  mb <- score
+  case mb of
+    Just sc -> return sc
+    _ | fuel <= 0 -> staticScore valueField
+    _ -> do
+      st <- get
+      ok <- liftIO $ addCacheEntry cache st
+      if ok
+        then do
+        best cache moves $ \mov -> do
+          -- liftIO $ putStrLn $ "fuel: " ++ show fuel ++ ", mov: " ++ [mov]
+          -- showStatus
+          eval valueField cache curBest (fuel - 1)
+        else return minf
 
 best :: Cache -> [Char] -> (Char -> LL Int) -> LL Int
 best cache ls m = do

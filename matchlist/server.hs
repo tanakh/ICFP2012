@@ -71,7 +71,7 @@ renderTable :: [Maybe SolvedResult] -> IO [Text]
 renderTable results = forM results $ \r -> do
   case r of
     Just v | isJust (sExitCode v) -> mustache "./views/td.mustache" v
-           | otherwise -> mustache "./views/td.lte.mustache" v
+           | otherwise -> mustache "./views/td.tle.mustache" v
     Nothing -> return "<td>N/A</td>"
 
 renderResult :: IO Text

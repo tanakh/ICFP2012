@@ -9,10 +9,13 @@ build-type:          Simple
 cabal-version:       >=1.8
 
 library
-  ghc-options:       -O3 -threaded -Wall
-  exposed-modules:   AIResult
+  ghc-options:         -O3 -threaded -Wall
+  exposed-modules:     AIResult
+                     , Utils
   build-depends:       base >= 4.5
                      , mtl
+                     , attoparsec-conduit
+                     , conduit
                      , optparse-applicative
                      , filepath
                      , bytestring
@@ -32,7 +35,7 @@ executable run_ais
                      , filepath
                      , system-filepath
                      , system-fileio
-                     , process
+                     , unix
                      , optparse-applicative
 
 executable server
@@ -42,6 +45,7 @@ executable server
   build-depends:       base >= 4.5
                      , mtl
                      , matchlist
+                     , conduit
                      , bytestring
                      , aeson
                      , filepath

@@ -93,6 +93,16 @@ executable ll-ai-bf
                      , unordered-containers, random, unix
   buildable:           True
 
+
+executable ll-ai-cf
+  ghc-options:         -O2 -auto-all -rtsopts
+  hs-source-dirs:      dist
+  main-is:             ../AI/CF.hs
+  build-depends:       base ==4.5.*, simulator
+                     , vector, data-lens-fd, mtl, control-monad-loop, stm
+                     , unordered-containers, random, unix
+  buildable:           True
+
 executable ll-ai-babayaga
   ghc-options:         -O2
   hs-source-dirs:      dist

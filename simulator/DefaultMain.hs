@@ -29,8 +29,6 @@ defaultMain oracle theSolver = do
     Option.InputFile fn -> readFile fn
   ansMVar <- newEmptyMVar
   stateMVar <- newEmptyMVar
-  when (Option.oracleSource opt/= "") $ do
-    Oracle.load oracle $ Option.oracleSource opt
   
   myProcID <- getProcessID
   let handler = do
@@ -75,5 +73,7 @@ defaultMain oracle theSolver = do
          score
          (take 6 $ show $ md5 $ L.pack replay))
         replay
+
   -- honban you shutsuryoku
-  putStrLn replay
+  infiniteLoop <- Oracle.ask oracle "infiniteLoop" $ return False
+  when (not infiniteLoop) $ putStrLn replay

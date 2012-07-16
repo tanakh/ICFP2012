@@ -102,6 +102,8 @@ class (Eq a, Ord a, Num a) => Terrain a where
     | otherwise    = True
   terrainSucc :: a->a
   terrainSucc x = if isPassable x then x+1 else x
+  terrainAdd :: a->a->a
+  terrainAdd y x  = if isPassable x then y+x else x
 
 instance Terrain Int where
   unknown = maxBound-2
@@ -143,6 +145,47 @@ dijkstra field sourceStr passableStr initVal = do
         newVals <- readFList field nr
         forM_ newVals $ \ _ -> do
           liftIO $ modifyIORef probes $ Q.insert (terrainSucc val, nr)
+  return ()
+    where
+      normalize c
+        | c `elem` "123456789" = '1'
+        | c `elem` "ABCDEFGHI" = 'A'
+        | True                 = c
+
+
+dijkstraEX :: (MonadIO m, Functor m, Terrain a, U.Unbox a) =>
+            Field a -> String -> String ->  
+            [(Char,a)] -> a -> Field a -> a -> LLT m ()
+dijkstraEX field sourceStr passableStr 
+           motionWeight earthDrug loveField initVal = do
+  bd <- access llBoardL
+  probes <- liftIO $ newIORef $ Q.empty
+  forPos $ \ r -> do
+    a <- liftIO $ normalize <$> readPos bd r
+    case a of
+      _ | a `elem` sourceStr   -> do
+           liftIO $ modifyIORef probes $ Q.insert (initVal, r)
+           writeF field r unknown
+        | a `elem` passableStr -> writeF field r unknown
+        | otherwise            -> writeF field r blocked
+    love <- unsafeReadF loveField r
+    when (love /= 0) $ do
+          liftIO $ modifyIORef probes $ Q.insert (love, r)
+          writeF field r unknown
+          
+  while (liftIO ((not . Q.null) <$> readIORef probes)) $ do
+    (val, r) <- liftIO $ Q.findMin <$> readIORef probes
+    liftIO $ modifyIORef probes Q.deleteMin
+    oldVal <- unsafeReadF field r
+    when (oldVal == unknown || (val < oldVal && oldVal /= blocked)) $ do
+      writeF field r val
+      forM_ motionWeight $ \ (char, w) -> do
+        let nr = r + (hand2pos char)
+        newVals <- readFList field nr
+        forM_ newVals $ \ _ -> do
+          aa <- unsafeReadF bd nr
+          let w2 = if aa == '.' then w*earthDrug else w
+          liftIO $ modifyIORef probes $ Q.insert (terrainAdd w2 val, nr)
   return ()
     where
       normalize c

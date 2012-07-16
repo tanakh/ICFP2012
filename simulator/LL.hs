@@ -138,6 +138,11 @@ runLLT txt m = do
         , let Just tp = lookup t targets
               erases = map fst $ filter ((==t).snd) trampp
         ]
+      revtramp =
+        [ (t, map (\e -> (e, fromJust $ lookup e tramps)) erases)
+        | (t, _) <- targets
+        , let erases = map fst $ filter ((==t).snd) trampp
+        ]
 
   -- parse beard
   let growth = head $ [ read g | ["Growth", g] <- map words txtM ] ++ [25]
@@ -160,6 +165,7 @@ runLLT txt m = do
         , llLiftPos = lpos
         , llFlood = fld
         , llTramp = tramp
+        , llRevTramp = revtramp
         , llGrowth = growth
 
         , llResult = Cont
@@ -519,6 +525,7 @@ unapply st LLPatch {..} = do
     , llLiftPos = llLiftPos st
     , llFlood = llFlood st
     , llTramp = llTramp st
+    , llRevTramp = llRevTramp st
     , llGrowth = llGrowth st
 
       -- revert previous status

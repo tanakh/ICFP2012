@@ -30,6 +30,7 @@ data LLState
     , llLiftPos      :: {-# UNPACK #-} !Pos
     , llFlood        :: !Flood
     , llTramp        :: ![(Char, (Char, Pos, [Pos]))]
+    , llRevTramp     :: ![(Char, [(Char, Pos)])]
     , llGrowth       :: {-# UNPACK #-} !Int
 
       -- current state

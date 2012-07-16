@@ -120,32 +120,50 @@ wideShow width val
     cut x = x
 
 dijkstra :: (MonadIO m, Functor m, Terrain a, U.Unbox a) =>
-            Field a -> String -> String -> a -> LLT m ()
-dijkstra field sourceStr passableStr initVal = do
+            Bool -> Field a -> String -> String -> a -> LLT m ()
+dijkstra robot field sourceStr passableStr initVal = do
   bd <- access llBoardL
+  tramp <- access llTrampL
+  revtramp <- access llRevTrampL
   probes <- liftIO $ newIORef $ Q.empty
   forPos $ \ r -> do
-    a <- liftIO $ normalize <$> readPos bd r
+    a <- liftIO $ readPos bd r
     case a of
       _ | a `elem` sourceStr   -> do
            liftIO $ modifyIORef probes $ Q.insert (initVal, r)
            writeF field r unknown
         | a `elem` passableStr -> writeF field r unknown
+        | a `elem` apass -> writeF field r unknown
         | otherwise            -> writeF field r blocked
-  while (liftIO ((not . Q.null) <$> readIORef probes)) $ do
+  void $ while (liftIO ((not . Q.null) <$> readIORef probes)) $ do
     (val, r) <- liftIO $ Q.findMin <$> readIORef probes
     liftIO $ modifyIORef probes Q.deleteMin
     oldVal <- unsafeReadF field r
+    c <- liftIO $ readPos bd r
     when (oldVal == unknown || (val < oldVal && oldVal /= blocked)) $ do
       writeF field r val
-      forM_ directions $ \ (_, dr) -> do
-        let nr = r + dr
-        newVals <- readFList field nr
-        forM_ newVals $ \ _ -> do
-          liftIO $ modifyIORef probes $ Q.insert (terrainSucc val, nr)
-  return ()
-    where
-      normalize c
-        | c `elem` "123456789" = '1'
-        | c `elem` "ABCDEFGHI" = 'A'
-        | True                 = c
+      case c of
+        -- reverse trampoline
+        _ | (not robot) && c `elem` targetChar -> do
+              let Just nears = map snd <$> lookup c revtramp
+              forM_ nears $ \n -> writeF field n unknown
+              moveAdj probes val nears
+          | robot && c `elem` trampoChar -> do
+              let Just (_, to, erases) = lookup c tramp
+              -- forM_ erases $ \n -> writeF field n unknown -- useless?
+              writeF field to unknown
+              moveAdj probes val [to]
+          | otherwise ->
+              let nears = map (\ (_, dr) -> r + dr) directions
+              in moveAdj probes val nears
+  where
+      apass = if robot then trampoChar else targetChar
+      trampoChar = "ABCDEFGHI"
+      targetChar = "123456789"
+      moveAdj probes val =
+        mapM_
+        (\nr -> do
+            newVals <- readFList field nr
+            forM_ newVals $ \ _ -> do
+              liftIO $ modifyIORef probes $ Q.insert (terrainSucc val, nr)
+        )

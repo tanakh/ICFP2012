@@ -28,6 +28,9 @@ import qualified Option
 minf :: Int
 minf = -10^(9::Int)
 
+moves :: [Char]
+moves = "LRUDWSA"
+
 type LL = LLT IO
 
 type Cache = IORef (HM.HashMap Word64 [CacheEntry])
@@ -82,7 +85,12 @@ main = do
     hashNow <- access llHashL
     liftIO $ modifyIORef historyRef $ HS.insert hashNow
     history <- liftIO $ readIORef historyRef
-    (mov, sc) <- withBackup $ search undefined hmr 0 bfDepth
+
+    (mov, sc) <- withBackup $ do
+      rs <- forM moves $ \mov -> withStep mov $ do
+        -- TODO: unify
+        (mov, ) <$> eval undefined hmr 0 bfDepth
+      return $ maximumBy (comparing snd) rs
 
     greedyDepth <- liftIO $ Oracle.ask oracle "greedyDepth" $ return 4
     valueField <- if step > 0 then liftIO $ readIORef valueFieldRef
@@ -112,44 +120,22 @@ main = do
     liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++  [mov,mov2]
     return $ Ans.Cont mov3
 
-best :: Cache -> [Char] -> (Char -> LL Int) -> LL (Char, Int)
-best cache ls m = do
-  res <- forM ls $ \x -> do
-    bef <- get
-    case () of
-      _ | x == 'S' && llRazors bef == 0 -> return (x, minf)
-      _ -> do
-        r <- withStep x $ do
-          cur <- get
-          if x `elem` "LRUD" && llPos bef == llPos cur
-            then return minf
-            else m x
-        return (x, r)
-  return $ maximumBy (comparing snd) res
+prePruning :: LLState -> Char -> LL Bool
+prePruning LLState {..} move
+  | move == 'S' && llRazors == 0 =
+    return False
+  | otherwise =
+    return True
 
-search :: Field Int -> Cache -> Int -> Int -> LL (Char, Int)
-search valueField cache curBest fuel
-  | fuel <= 0 =
-    (undefined,) <$> staticScore valueField
-  | otherwise = do
-    let choices= "LRUDWSA"
-    st <- get
-    ok <- liftIO $ addCacheEntry cache st
-    if ok
-      then do
-      best cache choices $ \mov -> do
-        mb <- score
-        -- liftIO $ putStrLn $ "fuel: " ++ show fuel ++ ", mov: " ++ [mov]
-        -- showStatus
-        case mb of
-          Nothing ->
-            snd <$> search valueField cache curBest (fuel - 1)
-          Just sc ->
-            return sc
-      else return ('A', minf)
+pruning :: LLState -> Char -> LLState -> LL Bool
+pruning cur move next
+  | move `elem` "LRUD" && llPos cur == llPos next =
+    return False
+  | otherwise =
+    return True
 
 staticScore :: Field Int -> LL Int
-staticScore valueField = do
+staticScore _ = do
   abortScore
   {-
   aScore <- abortScore
@@ -158,3 +144,37 @@ staticScore valueField = do
   step <- access llStepL
   return $ aScore + 0*step + futureScore
   -}
+
+eval :: Field Int -> Cache -> Int -> Int -> LL Int
+eval valueField cache !curBest !fuel
+  | fuel <= 0 =
+    staticScore valueField
+  | otherwise = do
+    st <- get
+    ok <- liftIO $ addCacheEntry cache st
+    if ok
+      then do
+      best cache moves $ \mov -> do
+        mb <- score
+        -- liftIO $ putStrLn $ "fuel: " ++ show fuel ++ ", mov: " ++ [mov]
+        -- showStatus
+        case mb of
+          Nothing ->
+            eval valueField cache curBest (fuel - 1)
+          Just sc ->
+            return sc
+      else return minf
+
+best :: Cache -> [Char] -> (Char -> LL Int) -> LL Int
+best cache ls m = do
+  res <- forM ls $ \x -> do
+    cur <- get
+    pp <- prePruning cur x
+    if pp
+      then do
+      withStep x $ do
+        next <- get
+        p <- pruning cur x next
+        if p then m x else return minf
+      else return minf
+  return $ maximum res

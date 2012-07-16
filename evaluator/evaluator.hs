@@ -20,6 +20,7 @@ import Text.Blaze.Html5.Attributes hiding (name, title, style)
 import qualified Text.Blaze.Html5.Attributes as A
 import Text.Blaze.Html.Renderer.String
 import qualified Data.Set as S
+import Data.Maybe
 
 data Result
   = Win
@@ -90,8 +91,19 @@ css = "td, th{border: solid 1px;}\n.Abort {background-color: yellow;}\n.Win{back
 
 renderRanking :: Env -> Html
 renderRanking env = do
+  renderAverageRanking env
   renderScoreRanking env
   renderWinRanking env
+
+renderAverageRanking Env{scores} = do
+  let totals = sortBy (flip $ comparing snd) $ M.toList $ fmap average $ M.mapKeysWith (<>) fst $ fmap (pure . fst) scores
+  h3 "average ranking"
+  ol $ do
+    forM_ (take 10 totals) $ \(h, totl) ->
+      li $ do
+        mkLink h
+        toHtml $ " (" <> show totl <> " pts)"
+  
 
 renderWinRanking :: Env -> Html
 renderWinRanking Env{scores} = do
@@ -129,11 +141,15 @@ renderScores Env {scores, problems, hashes} = do
       forM_ probs $ \prob -> th $ toHtml (BS.unpack prob)
     forM_ (S.toList hashes) $ \h -> do
       tr $ do
-        th (mkLink h)
+        let avr = average $ map (\p -> maybe 0 fst $ M.lookup (h, p) scores) probs
+        th (mkLink h <> br <> "Avr: " <> (toHtml $ show avr))
         forM_ probs $ \p ->
           maybe (td ! class_ "empty" $ "") renderResult $ M.lookup (h, p) scores
     where
     renderResult (pt, sc) = td ! class_ (toValue $ show sc) $ (toHtml $ show pt)
+
+average :: [Int] -> Float
+average xs = fromIntegral (sum xs) / fromIntegral (length xs)
 
 renderStrategy :: M.Map Hash Strategy -> Html
 renderStrategy strategies = table $ do

@@ -5,7 +5,6 @@ import qualified Data.Conduit.Filesystem as FC
 import Filesystem
 import Filesystem.Path.CurrentOS
 import Data.Monoid
-import qualified Data.Text.Encoding as T
 import qualified Data.Map as M
 import qualified Data.ByteString.Char8 as BS
 import Control.Monad.Writer

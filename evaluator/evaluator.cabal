@@ -50,7 +50,6 @@ executable evaluator
                ,       filesystem-conduit == 0.5.*
                ,       system-fileio == 0.3.*
                ,       system-filepath == 0.4.*
-               ,       text == 0.11.*
                ,       containers == 0.4.*
                ,       bytestring == 0.9.*
-               ,       mtl == 2.1.*
+               ,       mtl

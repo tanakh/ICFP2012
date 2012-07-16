@@ -5,7 +5,6 @@ import qualified Data.Conduit.Filesystem as FC
 import Filesystem
 import Filesystem.Path.CurrentOS
 import Data.Monoid
-import qualified Data.Text.Encoding as T
 import qualified Data.Map as M
 import qualified Data.ByteString.Char8 as BS
 import Control.Monad.Writer
@@ -39,7 +38,7 @@ mySink :: Sink FilePath Machine ()
 mySink = awaitForever $ \fp -> do
   isData <- liftIO $ isFile fp
   when isData $ do
-    let hash = T.encodeUtf8 $ encode $ dirname fp
+    let hash = BS.pack $ encodeString $ dirname fp
     [_, score, prob, _, strategy] <- liftIO $ BS.lines <$>readFile fp
     lift $ tell $ Env (M.singleton (hash, prob) $ read $ BS.unpack score)
                       (M.singleton hash $ read $ BS.unpack strategy)

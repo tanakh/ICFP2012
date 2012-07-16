@@ -146,7 +146,9 @@ runLLT txt m = do
         ]
 
   -- parse beard
-  let growth = head $ [ read g | ["Growth", g] <- map words txtM ] ++ [25]
+  let growth = head $ [ read g | ["Growth", g] <- map words txtM ] ++
+        [if null (finds (=='W')) then (-1) else 25]
+        -- if there is no beard, there will be no growth
       razors = head $ [ read r | ["Razors", r] <- map words txtM ] ++ [0]
 
   -- other info
@@ -200,10 +202,11 @@ showStatus = do
     printf "water: %02d/%02d\n"
       llWaterStep (Flood.waterproof llFlood)
 
-    printf "growth: %02d/%02d, razors: %d\n"
-      (llGrowth - 1 - (llStep `mod` llGrowth))
-      llGrowth
-      llRazors
+    when (llGrowth > 0) $
+      printf "growth: %02d/%02d, razors: %d\n"
+        (llGrowth - 1 - (llStep `mod` llGrowth))
+        llGrowth
+        llRazors
 
     when (not $ null llTramp) $ do
       putStrLn $ "trampoline: " ++
@@ -387,6 +390,7 @@ update wlog commit = do
   bup <- liftIO $ readPos llBoard $ llPos + Pos 0 1
 
   let growing = llStep `mod` llGrowth == llGrowth - 1
+  -- Always, growing == False  when llGrowth == (-1).
 
   cands <- {-# SCC "update/generateCands" #-}
     if not growing then return llRockPos

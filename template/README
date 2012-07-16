@@ -37,7 +37,7 @@ the path after last lambda obtained. The greatest advantage is that Oracle also 
 and manages them, and can perform systematic survey for better engines. We worked toghether, using Amazon EC2
 and our home servers, to organize the search for good AIs.
 
-This shows the great strengths of functional programming is its ability to do parallel and concurrent tasks cleanly.
+We think this shows the great strengths of functional programming is its ability to do parallel and concurrent tasks cleanly.
 Even on single-core machines.
 
 God bless Scotland!

@@ -24,7 +24,6 @@ import           LL
 import           Pos
 import           DefaultMain
 
-
 printe :: (MonadIO m, Show a) => a -> m ()
 printe = liftIO . hPutStrLn stderr . show
 
@@ -33,15 +32,15 @@ debugMode = False
 
 main = defaultMain greedySolver
 
+
 data Value =  Happy Int | Afraid Int | Unknown | Danger deriving (Eq, Ord, Show)
 
 data GrandValue =
   GrandValue
-  {expectedScore :: Int,
-   gameHasEnded :: Bool,
-   playValue :: Value
-  }deriving (Eq, Show)
-
+  { expectedScore :: Int
+  , gameHasEnded :: Bool
+  , playValue :: Value
+  } deriving (Eq, Show)
 
 grandValue n = GrandValue n True (Happy 0)
 
@@ -79,6 +78,23 @@ greedySolver = safetynet $ do
      then return $ Ans.Cont 'A'
      else return $ Ans.Cont cmd
 
+
+best :: (Functor m, MonadIO m)
+     => [Char] -> (Char -> LLT m Int) -> LLT m (Char, Int)
+best ls m = do
+  res <- forM ls $ \x -> do
+    bef <- get
+    case () of
+      _ | x == 'S' && llRazors bef == 0 -> return (x, minf)
+      _ -> do
+        r <- withStep x $ do
+          cur <- get
+          if x `elem` "LRUD" && llPos bef == llPos cur
+            then return minf
+            else m x
+        return (x, r)
+  return $ maximumBy (comparing snd) res
+
 evaluateHand :: (Functor m, MonadIO m) => Int -> Char -> LLT m (GrandValue, [Pos])
 evaluateHand depth hand
   | depth <= 0 = do
@@ -86,9 +102,10 @@ evaluateHand depth hand
       pos <- access llPosL
       return (val, [pos])
   | otherwise = do
-    withBackup $ do
+      pos0 <- access llPosL
+    withStep hand $ do
       roboPos0 <- access llPosL
-      result <- simulateStep hand
+      result <- 
       roboPos1 <- access llPosL
 
       let addReturn = (\val -> return (val, [roboPos1]))
@@ -100,17 +117,16 @@ evaluateHand depth hand
           Cont    ->
             head . sort <$> mapM (evaluateHand (depth-1)) "LRUDA"
 
-
 dijkstra guide = do
   bd <- access llBoardL
   probes <- liftIO $ newIORef $ Q.empty
   loopPos $ \ r -> do
-    a <- readPos bd r
+    a <- liftIO $ readPos bd r
     case a of
       _ | a == '\\' || a == 'O' -> do
            liftIO $ modifyIORef probes $ Q.insert (Happy 0, r)
         | a == '.' || a == ' ' || a == 'R' -> return ()
-        | otherwise -> writePos guide r Danger
+        | otherwise -> liftIO $ writePos guide r Danger
   while (liftIO ((not . Q.null) <$> readIORef probes)) $ do
     (val0, r) <- liftIO $ Q.findMin <$> readIORef probes
     liftIO $ modifyIORef probes Q.deleteMin
@@ -206,3 +222,14 @@ evaluatePlaying debugFlag = do
     _ | not liftYes          -> return $ GrandValue abortScoreHope False roboVal
       | roboVal   >= Unknown -> return $ GrandValue abortScore0 False roboVal
       | otherwise            -> return $ GrandValue winScoreHope False roboVal
+
+whenInBound bd (Pos x y) def action = liftIO $ do
+  let h = GM.length bd
+  w <- GM.length <$> GM.read bd 0
+  if x >= 0 && x < w && y >= 0 && y < h
+    then action
+    else return def
+
+readPosList bd p@(Pos x y) = whenInBound bd p (return []) $ do
+  row <- GM.read bd y
+  (:[]) <$> GM.read row x

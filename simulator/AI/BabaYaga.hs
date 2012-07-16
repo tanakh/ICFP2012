@@ -20,7 +20,7 @@ import Data.Lens
 main :: IO ()
 main = defaultMain $ do
   valueField <- newF (0::Int)
-  dijkstra valueField "\\O" " .*W!R" 0
+  dijkstra False valueField "\\O" " .*W!R" 0
   updateF valueField (75-)
   (mov, sc) <- withBackup $ search  valueField 8
   liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++ [mov]

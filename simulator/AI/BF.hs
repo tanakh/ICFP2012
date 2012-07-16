@@ -90,7 +90,7 @@ main = do
                                   ret <- newF (0::Int)
                                   liftIO $ writeIORef valueFieldRef ret
                                   return ret
-    dijkstra valueField "\\O" " .!\\R" 0
+    dijkstra False valueField "\\O" " .!\\R" 0
     updateF valueField (\x -> max 0 $ 75-x)
     roboPos <- access llPosL
     val <- unsafeReadF valueField roboPos

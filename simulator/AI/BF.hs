@@ -155,10 +155,14 @@ simplify verboseSwitch = do
 main :: IO ()
 main = do
   opt <- Option.parseIO
+  txt <- case Option.input opt of
+    Option.Stdin -> getContents
+    Option.InputFile fn -> readFile fn
   historyRef <- newIORef HS.empty
   valueFieldRef <- newIORef undefined
   loveFieldRef <- newIORef undefined
   hashLogRef <- newIORef []
+  yomiRef <- newIORef 0
   let inputfn = case Option.input opt of
             Option.InputFile fp -> fp
             Option.Stdin -> "STDIN"
@@ -168,30 +172,30 @@ main = do
     Oracle.load oracle $ Option.oracleSource opt
   hyperHistory <- newIORef HM.empty
 
-  infiniteLoop <- liftIO $ Oracle.ask oracle "infiniteLoop" $
-    return (Option.input opt == Option.Stdin)
 
+  infiniteLoop <- liftIO $ Oracle.ask oracle "infiniteLoop" $ 
+    return True
   (if infiniteLoop then forever else id) $ do
     -- generate randomize parameters
     motionWeight <- forM "LRUD" $ \char -> do
       w <- randomRIO (0.3, 2.0) -- !!!!!!!
       return (char, w)
     history <- newIORef HM.empty
-
+    
     earthDrugAmp <- liftIO $ Oracle.ask oracle "earthDrugAmp" $ return (0.0::Double)
     earthDrug <- exp <$> randomRIO (- earthDrugAmp, earthDrugAmp)
     itemLoveAmp <- liftIO $ Oracle.ask oracle "itemLoveAmp" $ return (0.0:: Double)
     placeLoveAmp <- liftIO $ Oracle.ask oracle "placeLoveAmp" $ return (0.0:: Double)
     placeLoveNum <- liftIO $ Oracle.ask oracle "placeLoveNum" $ return (0.0:: Double)
-
+    liftIO $ modifyIORef yomiRef (1+)
     --- start of One Challenge
-    defaultMain oracle $ do
+    defaultMain txt oracle $ do
       step <- access llStepL
       (liftIO . Oracle.submit oracle) =<< getAbortTejun
 
       (w,h) <- getSize
-      bfDepth <- liftIO $ Oracle.ask oracle "bfDepth" $ return (max 16 $ min 10 $
-        640 `div`( w+h  ))
+      yomiDepth <- liftIO $ readIORef yomiRef
+      bfDepth <- liftIO $ Oracle.ask oracle "bfDepth" $ return yomiDepth
       hmr <- liftIO $ newIORef HM.empty
 
       hashNow <- access llHashL
@@ -271,11 +275,11 @@ main = do
                return $ (snd top {-move-}, fst (fst top) {-whether it was safe-})
 
       combineBFFirst <- liftIO $ Oracle.ask oracle "combineBFFirst" $ return True
-      perfectGreedy <- liftIO $ Oracle.ask oracle "perfectGreedy" $ return (w+h>80)
-      perfectSearch <- liftIO $ Oracle.ask oracle "perfectSearch" $ return (w+h<40)
+      perfectGreedy <- liftIO $ Oracle.ask oracle "perfectGreedy" $ return $ False
+      perfectSearch <- liftIO $ Oracle.ask oracle "perfectSearch" $ return $ False
       movRand <- liftIO $ choose "RLDU"
       let mov3
-           | kabutta  && perfectGreedy                  = 'A'
+           | kabutta                                    = 'A'
            | perfectSearch                              = mov
            | perfectGreedy                              = mov2
            | combineBFFirst && (mov /= 'A' || val <= 0) = mov

@@ -21,12 +21,12 @@ import           Provider
 import qualified Flood
 
 
-defaultMain :: Oracle.Oracle -> Solver IO -> IO ()
-defaultMain oracle theSolver = do
+
+
+defaultMain :: String -> Oracle.Oracle -> Solver IO -> IO ()
+defaultMain txt oracle theSolver = do
   opt <- Option.parseIO
-  txt <- case Option.input opt of
-    Option.Stdin -> getContents
-    Option.InputFile fn -> readFile fn
+
   ansMVar <- newEmptyMVar
   stateMVar <- newEmptyMVar
   

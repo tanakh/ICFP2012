@@ -223,7 +223,7 @@ simpleSolver seed resource config lastStepChar = do
             liftIO $ modifyIORef (dijkstraMaps resource) $
               Map.insert srcStr b
             return b
-        when (True) $ dijkstra True smell srcStr passStr 1
+        when (True) $ dijkstra False smell srcStr passStr 1
         updateF smell (\x -> if isPassable x then x**pow else 0)
         forM_ validHands $ \hand -> do
           smellAt <- unsafeReadF smell (roboPos + hand2pos hand)

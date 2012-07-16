@@ -21,7 +21,7 @@ We deployed both head-on attack and surprise attack.
 
 Hideyuki wrote a Search, Pruning & Simplify engine. 
 On the second day, his routine read only about 6 hands and only for tiny maps, other members are anxious. 
-But finally, it reads more than 20 hands and can handle  
+But finally, it reads more than 20 hands and can handle  many tricky situations.
 The point is to simplify the map by regarding most of the earth as unimportant as spaces,
 and fast-fowarding through vacant spaces.
 

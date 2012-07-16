@@ -168,7 +168,7 @@ main = do
     Oracle.load oracle $ Option.oracleSource opt
   hyperHistory <- newIORef HM.empty
 
-  infiniteLoop <- liftIO $ Oracle.ask oracle "infiniteLoop" $ return (Option.input == )
+  infiniteLoop <- liftIO $ Oracle.ask oracle "infiniteLoop" $ return False
   (if infiniteLoop then forever else id) $ do
     -- generate randomize parameters
     motionWeight <- forM "LRUD" $ \char -> do
@@ -188,7 +188,7 @@ main = do
       (liftIO . Oracle.submit oracle) =<< getAbortTejun
 
       (w,h) <- getSize
-      bfDepth <- liftIO $ Oracle.ask oracle "bfDepth" $ return (max 16 $ min 2 $ 640 `div` (w+h)) -- was 16
+      bfDepth <- liftIO $ Oracle.ask oracle "bfDepth" $ return (max 10 $ min 2 $ 640 `div` (w+h)) -- was 16
       hmr <- liftIO $ newIORef HM.empty
 
       hashNow <- access llHashL
@@ -210,7 +210,7 @@ main = do
               next <- get
               c <- pruning cur mov next
               if c
-                then (mov, ) <$> eval undefined hmr 0 bfDepth
+                then (mov, ) <$> eval undefined hmr 0 (bfDepth * 10)
                 else return (mov, minf)
             else return (mov, minf)
         when (Option.verbose opt) $ do
@@ -332,22 +332,31 @@ eval valueField cache !curBest !fuel = do
     _ | fuel <= 0 -> staticScore valueField
     _ -> do
       addCacheEntry cache $ do
-        best cache moves $ \mov -> do
+        best cache moves $ \cost -> do
           -- liftIO $ putStrLn $ "fuel: " ++ show fuel ++ ", mov: " ++ [mov]
           -- showStatus
-          eval valueField cache curBest (fuel - 1)
+          eval valueField cache curBest (fuel - cost)
 
-best :: Cache -> [Char] -> (Char -> LL Int) -> LL Int
+best :: Cache -> [Char] -> (Int -> LL Int) -> LL Int
 best cache ls m = do
   ols <- ordering
   res <- forM ls $ \x -> do
     cur <- get
+
+    emps <- liftIO $ forM adj4 $ \d -> do
+      cell <- readPos (llBoard cur) (llPos cur + d)
+      return $ if cell `elem` "#*@W123456789" then 0 else 1
+    let cost
+          | sum emps <= 2 = 3
+          | sum emps == 3 = 8
+          | otherwise = 10
+
     pp <- prePruning cur x
     if pp
       then do
       withStep x $ do
         next <- get
         p <- pruning cur x next
-        if p then m x else return minf
+        if p then m cost else return minf
       else return minf
   return $ maximum res

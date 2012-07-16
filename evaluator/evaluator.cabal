@@ -53,3 +53,4 @@ executable evaluator
                ,       containers == 0.4.*
                ,       bytestring == 0.9.*
                ,       mtl
+               ,       blaze-html

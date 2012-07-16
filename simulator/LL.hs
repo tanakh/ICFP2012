@@ -21,6 +21,8 @@ module LL (
   readPos, readPosM, writePos,
   getReplay,
   getAbortTejun,
+  adjacent, isRock,
+
   -- full backup, and restore (maybe heave...)
   backupState, restoreState, withBackup,
 
@@ -108,9 +110,13 @@ pr2 = 8341975094375872387
 pr3 = 67463278932786926713
 
 hashChar :: Pos -> Char -> Word64
-hashChar (Pos x y) c = do
+hashChar (Pos x y) (cvt -> c) = do
   fromIntegral x * pr1 + fromIntegral y * pr2 +
     fromIntegral (fromEnum c) * pr3
+
+cvt :: Char -> Char
+cvt '\\' = ' ' -- lamda is equivalent to space?
+cvt c    = c
 
 runLLT :: MonadIO m => String -> LLT m a -> m a
 runLLT txt m = do
@@ -166,6 +172,7 @@ runLLT txt m = do
         , llStep = 0
         , llPos = rpos
         , llLambdas = 0
+        , llPenalty = 0
 
         , llRockPos = sort rocks
         , llWaterStep = 0
@@ -328,7 +335,9 @@ move d@(Pos _ dy) wlog = do
         -- move to empty space
         liftIO $ wlog p0 ' '
         liftIO $ wlog p1 'R'
-        when (c1 == '\\') $ void $ llLambdasL += 1
+        when (c1 == '\\') $ do
+          void $ llLambdasL += 1
+          void $ llPenaltyL += llStep
         when (c1 == 'O')  $ void $ llResultL ~= Win
         when (c1 == '!')  $ void $ llRazorsL += 1
         llPosL ~= p1
@@ -415,7 +424,6 @@ update wlog commit = do
             forM_ adjacent $ \((pca+) -> pw) -> do
               !cell <- readPos llBoard pw
               when (cell == ' ') $ wlog pw 'W'
-            modifyIORef rrocks (pca:)
 
         | isRock ca &&
           cb == ' ' -> do
@@ -491,6 +499,7 @@ stash mv = do
         , pPrevResult  = llResult
         , pPrevPos     = llPos
         , pPrevLambdas = llLambdas
+        , pPrevPenalty = llPenalty
         , pPrevRocks   = llRockPos
         , pPrevWater   = llWaterStep
         , pPrevRazors  = llRazors
@@ -526,6 +535,7 @@ unapply st LLPatch {..} = do
     , llStep      = llStep st - 1
     , llPos       = pPrevPos
     , llLambdas   = pPrevLambdas
+    , llPenalty   = pPrevPenalty
     , llRockPos   = pPrevRocks
     , llWaterStep = pPrevWater
     , llRazors    = pPrevRazors

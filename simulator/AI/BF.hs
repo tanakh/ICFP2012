@@ -10,6 +10,7 @@ import qualified Data.HashMap.Strict as HM
 import Data.IORef
 import qualified Data.Vector.Mutable as VM
 import Data.List
+import qualified Data.HashSet as HS
 import Data.Lens
 import Data.Word
 import Data.Ord
@@ -25,9 +26,10 @@ import AI.GorinNoSho
 import AI.Oracle
 import qualified Option
 import AI.Cooking(choose)
+import Pos
 
 minf :: Int
-minf = -10^(9::Int)
+minf = -10^(8::Int)
 
 moves :: [Char]
 moves = "LRUDWSA"
@@ -41,6 +43,8 @@ data CacheEntry
     { ceStep      :: {-# UNPACK #-} !Int
     , ceWaterStep :: {-# UNPACK #-} !Int
     , ceRazors    :: {-# UNPACK #-} !Int
+    , cePenalty   :: {-# UNPACK #-} !Int
+    , ceScore     :: {-# UNPACK #-} !Int
     }
 
 type History = IORef (HM.HashMap Word64 Int)
@@ -60,25 +64,46 @@ modifyHistory hist key f = do
   modifyIORef hist $ HM.insert key (f x)
 
 
+
+
 isWorseThan :: CacheEntry -> CacheEntry -> Bool
 a `isWorseThan` b =
   ceStep a >= ceStep b
   && ceWaterStep a >= ceWaterStep b
   && ceRazors a <= ceRazors b
+  && (ceScore a, 0) <= (ceScore b, 0)
+  --  && (ceScore a, - cePenalty a) <= (ceScore b, - cePenalty b)
 
-addCacheEntry :: IORef (HM.HashMap Word64 [CacheEntry]) -> LLState -> IO Bool
-addCacheEntry hmr st = do
-  hm <- readIORef hmr
-  let ce = CacheEntry (llStep st) (llWaterStep st) (llRazors st)
+addCacheEntry :: IORef (HM.HashMap Word64 [CacheEntry]) -> LL Int -> LL Int
+addCacheEntry hmr m = do
+  st <- get
+
+  hm <- liftIO $ readIORef hmr
+  let ce = CacheEntry
+             { ceStep = llStep st
+             , ceWaterStep = llWaterStep st
+             , ceRazors = llRazors st
+             , cePenalty = llPenalty st
+             , ceScore = llLambdas st
+             }
   let cm = case HM.lookup (llHash st) hm of
-        Just cfs -> not $ any (ce `isWorseThan`) cfs
-        _ -> True
-  when cm $ do
-    modifyIORef hmr $ HM.insertWith (++) (llHash st) [ce]
-  return cm
+        Just cfs
+          | not $ any (ce `isWorseThan`) cfs -> Nothing
+          | otherwise -> Just $ maximum $ map ceScore cfs
+        _ -> Nothing
+  case cm of
+    Nothing -> do
+      liftIO $ modifyIORef hmr $ HM.insertWith (++) (llHash st) [ce]
+      sc <- m
+      --liftIO $ modifyIORef hmr $ HM.insertWith (++) (llHash st)
+      --  [ce { ceScore = sc }]
+      return sc
+    Just _ ->
+      return minf
 
-goodnessCheck :: History -> History -> Int ->  Char -> LL Int
-goodnessCheck hist hyperhist fuel hand
+
+badnessCheck :: History -> History -> Int ->  Char -> LL Int
+badnessCheck hist hyperhist fuel hand
   | fuel <= 0 = withStep hand $ do
                        res <- access llResultL
                        h <- access llHashL
@@ -86,22 +111,48 @@ goodnessCheck hist hyperhist fuel hand
                        cnt <- liftIO $ readHistory hist h
                        cnt2 <- liftIO $ readHistory hyperhist h
                        return $ case () of
-                                  _ | res == Dead        -> -3
-                                    | cnt > 0            -> -2
-                                    | cnt2*step >  0     -> -1
+                                  _ | res == Dead        ->  3
+                                    | cnt > 0            ->  2
+                                    | cnt2*step >  0     ->  1
                                     | True               ->  0
   | otherwise = withStep hand $ do
-                    gs <- (forM "LRUD" $ goodnessCheck hist hyperhist (fuel-1))
+                    gs <- (forM "LRUD" $ badnessCheck hist hyperhist (fuel-1))
                     return $ maximum gs
+
+
+adjR =
+  [ Pos 1 0
+  , Pos 0 1
+  , Pos (-1) 0
+  ]
+
+simplify :: LL ()
+simplify = do
+  bd <- access llBoardL
+  forPos $ \p -> do
+    cell <- liftIO $ readPos bd p
+    liftIO $ when (cell == '.') $ do
+      keep <- forM adjR $ \((+p) -> n) -> do
+        nell <- readPos bd n
+        return $ isRock nell || nell == 'W'
+      when (not $ or keep) $ do
+        writePos bd p ' '
+  liftIO $ putStrLn "simplify to:"
+  showBoard
+
+
 main :: IO ()
 main = do
   opt <- Option.parseIO
+  historyRef <- newIORef HS.empty
   valueFieldRef <- newIORef undefined
   loveFieldRef <- newIORef undefined
+  hashLogRef <- newIORef []
   let inputfn = case Option.input opt of
             Option.InputFile fp -> fp
             Option.Stdin -> "STDIN"
   oracle <- Oracle.new inputfn
+
   when (Option.oracleSource opt/= "") $ do
     Oracle.load oracle $ Option.oracleSource opt
   hyperHistory <- newIORef HM.empty  
@@ -138,10 +189,24 @@ main = do
         when (useHyperHistory) $ modifyHistory hyperHistory hashNow (1+)  
   
       (mov, sc) <- withBackup $ do
-        rs <- forM moves $ \mov -> withStep mov $ do
-          -- TODO: unify
-          (mov, ) <$> eval undefined hmr 0 bfDepth
+        simplify
+        rs <- forM moves $ \mov -> do
+          cur <- get
+          b <- prePruning cur mov
+          if b
+            then do
+            withStep mov $ do
+              next <- get
+              c <- pruning cur mov next
+              if c
+                then (mov, ) <$> eval undefined hmr 0 bfDepth
+                else return (mov, minf)
+            else return (mov, minf)
+        liftIO $ print rs
+        liftIO $ print . HM.size =<< readIORef hmr
+        liftIO $ print . sum . map length . map snd . HM.toList =<< readIORef hmr
         return $ maximumBy (comparing snd) rs
+
   
       (w,h) <- getSize
       roboPos <- access llPosL
@@ -164,7 +229,8 @@ main = do
             newLoveField <- newF (0::Double)
             forPos $ \ r -> do
               a <- unsafeReadF bd r
-              when (a `elem` "ABCDEFGHI!" && itemLoveAmp > 0) $ 
+              when (a `elem` "ABCDEFGHI!" && itemLoveAmp /= 0) $ do
+                printe "ATTAGIGE"
                 writeF newLoveField r =<< liftIO (randomRIO (0, itemLoveAmp * radius))
               when (placeLoveNum > 0) $ do
                 dice <- liftIO $ randomRIO (0,1)
@@ -180,14 +246,14 @@ main = do
             | razors > 0 = " .!\\RWA"
             | otherwise  = " .!\\RA"
       dijkstraEX valueField "\\O" passable motionWeight earthDrug loveField 0
-      updateF valueField (\x -> max 0 $ 75-x)
+      showF (wideShow 5) valueField
       val <- unsafeReadF valueField roboPos
-      (mov2, confidence) <-  do
+      (mov2, yabasa) <-  do
                cand <- forM "LRUD" $ \hand -> do
                      val3 <- unsafeReadF valueField $ roboPos + hand2pos hand
-                     flag <- goodnessCheck history hyperHistory greedyDepth hand
+                     flag <- badnessCheck history hyperHistory greedyDepth hand
                      return ((flag,val3), hand)
-               let top = last $ sort $ cand
+               let top = head $ sort $ cand
                return $ (snd top {-move-}, fst (fst top) {-whether it was safe-})
   
       combineBFFirst <- liftIO $ Oracle.ask oracle "combineBFFirst" $ return True
@@ -198,12 +264,14 @@ main = do
            | perfectGreedy                              = mov2
            | combineBFFirst && (mov /= 'A' || val <= 0) = mov
            | combineBFFirst                             = mov2
-           | not (combineBFFirst) && (confidence < 0)   = mov2
+           | not (combineBFFirst) && (yabasa > 0)       = mov2
            | otherwise                                  = mov
   
       when (Option.verbose opt) $ liftIO $ putStrLn $ "score : " ++ show sc ++ ", move: " ++  [mov,mov2]
       return $ Ans.Cont mov3
   
+
+
 
 prePruning :: LLState -> Char -> LL Bool
 prePruning LLState {..} move
@@ -219,11 +287,13 @@ pruning cur move next
   | otherwise =
     return True
 
+scoreOfs = 10^5
+
 staticScore :: Field Int -> LL Int
 staticScore _ = do
   LLState {..} <- get
   abt <- abortScore
-  return abt
+  return $ (abt * scoreOfs) - llPenalty
   {-
   aScore <- abortScore
   pos <- access llPosL
@@ -236,18 +306,14 @@ eval :: Field Int -> Cache -> Int -> Int -> LL Int
 eval valueField cache !curBest !fuel = do
   mb <- score
   case mb of
-    Just sc -> return sc
+    Just sc -> return $ sc * scoreOfs
     _ | fuel <= 0 -> staticScore valueField
     _ -> do
-      st <- get
-      ok <- liftIO $ addCacheEntry cache st
-      if ok
-        then do
+      addCacheEntry cache $ do
         best cache moves $ \mov -> do
           -- liftIO $ putStrLn $ "fuel: " ++ show fuel ++ ", mov: " ++ [mov]
           -- showStatus
           eval valueField cache curBest (fuel - 1)
-        else return minf
 
 best :: Cache -> [Char] -> (Char -> LL Int) -> LL Int
 best cache ls m = do

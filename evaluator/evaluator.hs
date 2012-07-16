@@ -95,6 +95,7 @@ renderRanking env = do
   renderScoreRanking env
   renderWinRanking env
 
+renderAverageRanking :: Env -> Html
 renderAverageRanking Env{scores} = do
   let totals = sortBy (flip $ comparing snd) $ M.toList $ fmap average $ M.mapKeysWith (<>) fst $ fmap (pure . fst) scores
   h3 "average ranking"
@@ -141,7 +142,7 @@ renderScores Env {scores, problems, hashes} = do
       forM_ probs $ \prob -> th $ toHtml (BS.unpack prob)
     forM_ (S.toList hashes) $ \h -> do
       tr $ do
-        let avr = average $ map (\p -> maybe 0 fst $ M.lookup (h, p) scores) probs
+        let avr = average $ mapMaybe (\p -> fst <$> M.lookup (h, p) scores) probs
         th (mkLink h <> br <> "Avr: " <> (toHtml $ show avr))
         forM_ probs $ \p ->
           maybe (td ! class_ "empty" $ "") renderResult $ M.lookup (h, p) scores

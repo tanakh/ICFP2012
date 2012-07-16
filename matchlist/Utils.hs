@@ -11,8 +11,8 @@ import Data.ByteString (ByteString)
 import qualified Data.Conduit as C
 import qualified Data.Conduit.Attoparsec as CA
 import Data.Data
-import Control.Monad.Trans.Class
-import Control.Exception.Lifted as E
+import Control.Exception
+import Control.Monad.Trans
 
 data ParserError
   = ParserError String

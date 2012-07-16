@@ -2,7 +2,7 @@ KEN-RON!
 ========
 
 
-We are the Haskell lovers from Japan. We are so glad to attend to 
+We are the Haskell lovers from Japan. We are so glad to attend by pure Haskeller team this time!
 
 Member
 ------
@@ -33,12 +33,11 @@ On the third day, everyone was sleepy, inefficient, git commits conflicted, and 
 But in the final moments, the two approach led to a fusion. Our searchers have adjustable parameters,
 The master (called Oracle) would gradually launch from faster one to heavier ones, and when the SIGINT
 comes, submit the best result so far. One merit of this approach is that Oracle would automatically truncate
-the path after last lambda obtained. The ot
+the path after last lambda obtained. The greatest advantage is that Oracle also provides the searcher parameters
+and manages them, and can perform systematic survey for better engines. We worked toghether, using Amazon EC2
+and our home servers, to organize the search for good AIs.
 
-
-
-. One of the great strengths of functional programming is its ability to do parallel and concurrent tasks cleanly.
-I feel that with the pervasiveness of multi-core hardware, contest orginizers should provide at least two cores
-in their VMs. 
+This shows the great strengths of functional programming is its ability to do parallel and concurrent tasks cleanly.
+Even on single-core machines.
 
 God bless Scotland!

@@ -168,7 +168,9 @@ main = do
     Oracle.load oracle $ Option.oracleSource opt
   hyperHistory <- newIORef HM.empty
 
-  infiniteLoop <- liftIO $ Oracle.ask oracle "infiniteLoop" $ return False
+  infiniteLoop <- liftIO $ Oracle.ask oracle "infiniteLoop" $
+    return (Option.input opt == Option.Stdin)
+
   (if infiniteLoop then forever else id) $ do
     -- generate randomize parameters
     motionWeight <- forM "LRUD" $ \char -> do
@@ -188,7 +190,8 @@ main = do
       (liftIO . Oracle.submit oracle) =<< getAbortTejun
 
       (w,h) <- getSize
-      bfDepth <- liftIO $ Oracle.ask oracle "bfDepth" $ return (max 10 $ min 2 $ 640 `div` (w+h)) -- was 16
+      bfDepth <- liftIO $ Oracle.ask oracle "bfDepth" $ return (max 16 $ min 10 $
+        640 `div`( w+h  ))
       hmr <- liftIO $ newIORef HM.empty
 
       hashNow <- access llHashL

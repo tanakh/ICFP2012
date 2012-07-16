@@ -19,25 +19,25 @@ Our Strategy
 
 We deployed both head-on attack and surprise attack.
 
-Hideyuki wrote a Search, Pruning & Simplify engine. 
-On the second day, his routine read only about 6 hands and only for tiny maps, other members are anxious. 
-But finally, it reads more than 20 hands and can handle  many tricky situations.
+Hideyuki wrote a Search, Pruning & Simplify engine.
+On the second day, his routine read only about 6 hands and only for tiny maps, other members are anxious.
+But finally, it reads more than 20 hands and can handle many tricky situations.
 The point is to simplify the map by regarding most of the earth as unimportant as spaces,
-and fast-fowarding through vacant spaces.
+and fast-forwarding through vacant spaces.
 
 Our surprise attack is to run lightweight greedy search engines.
-Each individual is not smart, but we launched them in tens and hundreds, and even fork in the middleways.
+Each individual is not smart, but we launched them in tens and hundreds, and even fork in the midways.
 A manager will collect the partial results, launch new searcher threads and finally submit the best solution.
 
-On the third day, everyone was sleepy, inefficient, git commits conflicted, and we are in despair. 
+On the third day, everyone was sleepy, inefficient, git commits conflicted, and we are in despair.
 But in the final moments, the two approach led to a fusion. Our searchers have adjustable parameters,
 The master (called Oracle) would gradually launch from faster one to heavier ones, and when the SIGINT
 comes, submit the best result so far. One merit of this approach is that Oracle would automatically truncate
 the path after last lambda obtained. The greatest advantage is that Oracle also provides the searcher parameters
-and manages them, and can perform systematic survey for better engines. We worked toghether, using Amazon EC2
+and manages them, and can perform systematic survey for better engines. We worked together, using Amazon EC2
 and our home servers, to organize the search for good AIs.
 
-We think this shows the great strengths of functional programming is its ability to do parallel and concurrent tasks cleanly.
+We think this shows the great strengths of functional programming, its ability to do parallel and concurrent tasks cleanly.
 Even on single-core machines.
 
 God bless Scotland!

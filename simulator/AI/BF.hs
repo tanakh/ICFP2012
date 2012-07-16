@@ -161,7 +161,7 @@ main = do
   (if infiniteLoop then forever else id) $ do
     -- generate randomize parameters
     motionWeight <- forM "LRUD" $ \char -> do
-      w <- randomRIO (0.1, 3)
+      w <- randomRIO (0.3, 2.0) -- !!!!!!!
       return (char, w)
     history <- newIORef HM.empty
 
@@ -260,7 +260,7 @@ main = do
       perfectGreedy <- liftIO $ Oracle.ask oracle "perfectGreedy" $ return False
       movRand <- liftIO $ choose "RLDU"
       let mov3
-           | kabutta                                    = 'A'
+           | kabutta  && perfectGreedy                  = 'A'
            | perfectGreedy                              = mov2
            | combineBFFirst && (mov /= 'A' || val <= 0) = mov
            | combineBFFirst                             = mov2

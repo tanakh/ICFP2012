@@ -38,12 +38,12 @@ $(deriveJSON (drop 4) ''Score)
 
 data SolvedResult =
   SolvedResult
-  { sExitCode :: Maybe Int
-  , sMapSpec :: MapSpec
-  , sAISpec :: AISpec
-  , sBaseName :: String
-  , sScore :: Score
-  , sTimeElapsed :: Double
+  { sExitCode :: !(Maybe Int)
+  , sMapSpec :: !MapSpec
+  , sAISpec :: !AISpec
+  , sBaseName :: !String
+  , sScore :: !Score
+  , sTimeElapsed :: !Double
   }
   deriving (Show, Data, Typeable)
 $(deriveJSON (drop 1) ''SolvedResult)

@@ -7,12 +7,11 @@ import Text.Hastache
 import Text.Hastache.Context
 -- import Network.Wai.Middleware.RequestLogger
 import Network.Wai.Middleware.Static
-import qualified Data.Aeson as A
 import Data.Text.Lazy (Text)
 import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Lazy.IO as TL
 import qualified Data.Text.Lazy.Encoding as TL
-import qualified Data.ByteString.Lazy as BL
+import qualified Data.Conduit.Binary as CB
+import qualified Data.Conduit as C
 import Data.Data
 import qualified Data.Map as M
 import Data.List
@@ -21,9 +20,9 @@ import Control.Applicative ((<$>))
 import Control.Monad.Trans
 import Control.Monad
 import System.Directory (getDirectoryContents)
-import qualified System.IO as IO
 import System.FilePath ((</>))
 
+import Utils
 import AIResult
 
 data Results =
@@ -49,7 +48,7 @@ getSolvedResultList :: IO [SolvedResult]
 getSolvedResultList = do
   files <- getDirectoryContents resultDir
   let list = (map (resultDir </>) . filter (isSuffixOf ".result")) $ files
-  dat <- forM list $ \f -> A.decode <$> BL.readFile f
+  dat <- forM list $ \f -> C.runResourceT $ CB.sourceFile f C.$$ sinkFromJSON
   return $ catMaybes dat
 
 getResults :: [SolvedResult] -> IO Results
